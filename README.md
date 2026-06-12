@@ -19,18 +19,22 @@ Enter Command args
 ```bash
   -f         Input Video VES File ( Supported videocodecs: H.264/AVC, H.265/HEVC )
   -fdv       Input Dolby Vision Enhancement Layer VES File ( Supported videocodecs: H.265/HEVC )
-  -a         Input Audio VES File ( Supported audiocodecs: AC3 / E-AC3(DD+), Dolby TrueHD, DTS/ DTS-HD, LPCM )
-  -alang     Set Audio Language, default=und
+  -a         Input Audio VES File ( Supported audiocodecs: AC3/E-AC3(DD+), Dolby TrueHD, DTS/DTS-HD, LPCM )
+  -ain       Set Audio IN Time, Set Delay relative to video; Support: Milliseconds and TimeCode (0 (ms) or 00:00:00:00)
+  -alang     Set Audio Language, Default=und
   -s         Input Subtitles VES File ( Supported Subtitlecodecs: Presentation Graphic Stream (.sup))
-  -sin       Set IN Time Subtitles
-  -slang     Set Subtitles Language, default=und
+  -sin       Set IN Time Subtitles, Set Delay relative to video; Support: Milliseconds and TimeCode (0 (ms) or 00:00:00:00)
+  -slang     Set Subtitles Language, Default=und
   -preid     Set Audio and Subtitle ID Default Track. Example: 1:1 (a:s)
   -t         Input CSV File ( Chapters Timecode ), default=00:00:00:00
   -intime    Set Video IN Time
-  -off       off Video Start TimeCode
+  -outtime   Set Video OUT Time
+  -off       Off Video Start TimeCode
   -tc        Specify Video Start TimeCode
+  -append    Append Files (separator for multiple file groups)
   -mux       Output MUX Folder
   -hypermux  HyperMUXing Uses Metadata That References The Original Assets To Create a virtual BDMV volume and image
+  --config   Load parameters from JSON config file
 
 muxserver options:
 -muxserver   Startup MUXRemotingServer. Example: exe Exe Path port Port Number

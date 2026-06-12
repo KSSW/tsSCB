@@ -1,9 +1,24 @@
 # -*- coding: utf-8 -*-
 
 import os
-from pgtc import pg
+from pgtc_ms_ues import pg
 
 def maked_playlist(in_time, out_time, out_tc_dv, value_chap, timestamps, sct, vfv, vfps, a_ves_pid_list, pg_all_value_list, video, a_ves_paths, s_pes_paths, aci_list, apt_list, sf_list, f_count, fdv_count, a_count, s_count, dp_x0_value, dp_y0_value, dp_x1_value, dp_y1_value, dp_x2_value, dp_y2_value, wp_x_value, wp_y_value, max_dml_value, min_dml_value, maxCLL_value, maxFALL_value, dynamic_range_type, sct_dv_value, video_dv_format_code, fps_code_0_dv, dm_value, cpf_value_mode_dv, color_space_dv, dynamic_range_type_dv, hdr10pf_value_mode_dv, all_group_results=None):
+    # Guard against None for optional tracks
+    if a_ves_pid_list is None:
+        a_ves_pid_list = []
+    if pg_all_value_list is None:
+        pg_all_value_list = []
+    if a_ves_paths is None:
+        a_ves_paths = []
+    if s_pes_paths is None:
+        s_pes_paths = []
+    if aci_list is None:
+        aci_list = []
+    if apt_list is None:
+        apt_list = []
+    if sf_list is None:
+        sf_list = []
     if video:
         primary_video_stream = f"""
               <primary_video_stream>
@@ -37,6 +52,7 @@ def maked_playlist(in_time, out_time, out_tc_dv, value_chap, timestamps, sct, vf
         nos_numbers = []
         lp_dvs = []
         all_info_number_of_SubPaths_final = []
+        append_play_items = []
         
         if sct == '24':
                 
@@ -177,6 +193,9 @@ def maked_playlist(in_time, out_time, out_tc_dv, value_chap, timestamps, sct, vf
     nos_numbers_final = "\n".join(nos_numbers)
     all_info_number_of_SubPaths_final = "\n".join(lp_dvs)
 
+    if all_info_number_of_SubPaths_final:
+      all_info_number_of_SubPaths_final = "\n" + all_info_number_of_SubPaths_final
+
     for idx, (pid, a_path, lang), in enumerate(a_ves_pid_list):
         aci_code = aci_list[idx]
         apt_value = apt_list[idx]
@@ -208,10 +227,12 @@ def maked_playlist(in_time, out_time, out_tc_dv, value_chap, timestamps, sct, vf
             )
             primary_audio_streams.append(audio_stream_block)
 
+    final_stream = []
     for s_pid, s_path, s_lang, sin_timecode, pg_value in pg_all_value_list:
 
         if s_pes_paths:
             subtitles = (
+                f"            <Loop_PG_textST_stream>\n"
                 f"              <PG_textST_stream>\n"
                 f"                <stream_entry>\n"
                 f"                  <type>1</type>\n"
@@ -229,12 +250,25 @@ def maked_playlist(in_time, out_time, out_tc_dv, value_chap, timestamps, sct, vf
                 f"                    </PG_stream>\n"
                 f"                  </Select_stream_coding_type>\n"
                 f"                </stream_attributes>\n"
-                f"              </PG_textST_stream>"
+                f"              </PG_textST_stream>\n"
+                f"            </Loop_PG_textST_stream>"
             )
             final_stream.append(subtitles)
 
     all_audio_streams_final = "\n".join(primary_audio_streams)
     all_sub_streams_final = "\n".join(final_stream)
+
+    if not all_audio_streams_final:
+      all_audio_streams_final = f"            <Loop_primary_audio_stream />"
+
+    if not all_sub_streams_final:
+      all_sub_streams_final = f"            <Loop_PG_textST_stream />"
+
+    if not append_play_items:
+      append_play_items = f"        </PlayItem>"
+
+    if not all_info_number_of_SubPaths_final:
+      all_info_number_of_SubPaths_final = f"        </PlayItem>"
 
     # Build append PlayItems block BEFORE the f-string template (backslash not allowed inside f-string)
     _nl = "\n"
@@ -285,8 +319,8 @@ def maked_playlist(in_time, out_time, out_tc_dv, value_chap, timestamps, sct, vf
           <Select_is_multi_angle />
           <STN_table>
             <number_of_primary_video_stream_entries>1</number_of_primary_video_stream_entries>
-            <number_of_primary_audio_stream_entries>1</number_of_primary_audio_stream_entries>
-            <number_of_PG_textST_stream_entries>1</number_of_PG_textST_stream_entries>
+            <number_of_primary_audio_stream_entries>{a_count}</number_of_primary_audio_stream_entries>
+            <number_of_PG_textST_stream_entries>{s_count}</number_of_PG_textST_stream_entries>
             <number_of_IG_stream_entries>0</number_of_IG_stream_entries>
             <number_of_secondary_audio_stream_entries>0</number_of_secondary_audio_stream_entries>
             <number_of_secondary_video_stream_entries>0</number_of_secondary_video_stream_entries>
@@ -303,58 +337,20 @@ def maked_playlist(in_time, out_time, out_tc_dv, value_chap, timestamps, sct, vf
                   </Select_type>
                 </stream_entry>
                 <stream_attributes>
-                  <stream_coding_type>1B</stream_coding_type>
+                  <stream_coding_type>{sct}</stream_coding_type>
                   <Select_stream_coding_type>
                     <video_stream>
-                      <video_format>6</video_format>
-                      <frame_rate>1</frame_rate>
+                      <video_format>{vfv}</video_format>
+                      <frame_rate>{vfps}</frame_rate>
                     </video_stream>
                   </Select_stream_coding_type>
                 </stream_attributes>
               </primary_video_stream>
             </Loop_primary_video_stream>
             <Loop_primary_audio_stream>
-              <primary_audio_stream>
-                <stream_entry>
-                  <type>1</type>
-                  <Select_type>
-                    <type_1>
-                      <ref_to_stream_PID_of_mainClip>4352</ref_to_stream_PID_of_mainClip>
-                    </type_1>
-                  </Select_type>
-                </stream_entry>
-                <stream_attributes>
-                  <stream_coding_type>83</stream_coding_type>
-                  <Select_stream_coding_type>
-                    <audio_stream>
-                      <audio_presentation_type>6</audio_presentation_type>
-                      <sampling_frequency>1</sampling_frequency>
-                      <audio_language_code>eng</audio_language_code>
-                    </audio_stream>
-                  </Select_stream_coding_type>
-                </stream_attributes>
-              </primary_audio_stream>
+{all_audio_streams_final}
             </Loop_primary_audio_stream>
-            <Loop_PG_textST_stream>
-              <PG_textST_stream>
-                <stream_entry>
-                  <type>1</type>
-                  <Select_type>
-                    <type_1>
-                      <ref_to_stream_PID_of_mainClip>4608</ref_to_stream_PID_of_mainClip>
-                    </type_1>
-                  </Select_type>
-                </stream_entry>
-                <stream_attributes>
-                  <stream_coding_type>90</stream_coding_type>
-                  <Select_stream_coding_type>
-                    <PG_stream>
-                      <PG_language_code>eng</PG_language_code>
-                    </PG_stream>
-                  </Select_stream_coding_type>
-                </stream_attributes>
-              </PG_textST_stream>
-            </Loop_PG_textST_stream>
+{all_sub_streams_final}
             <Loop_IG_stream />
             <Loop_secondary_audio_stream />
             <Loop_secondary_video_stream />
@@ -362,7 +358,7 @@ def maked_playlist(in_time, out_time, out_tc_dv, value_chap, timestamps, sct, vf
           </STN_table>
         </PlayItem>
 ''' for i, group in enumerate(all_group_results)])
-        append_play_items = _append_items_raw.rstrip('\n')
+        append_play_items = "\n" + _append_items_raw.rstrip('\n')
     else:
         append_play_items = ""
 
@@ -376,8 +372,6 @@ def maked_playlist(in_time, out_time, out_tc_dv, value_chap, timestamps, sct, vf
           <entry_ES_PID>65535</entry_ES_PID>
           <duration>0</duration>
         </PL_Mark>""" for ts in value_chap)
-
-    
 
     xml_template = f"""
 <?xml version="1.0" encoding="UTF-8"?>
@@ -490,17 +484,13 @@ def maked_playlist(in_time, out_time, out_tc_dv, value_chap, timestamps, sct, vf
             <Loop_primary_audio_stream>
 {all_audio_streams_final}
             </Loop_primary_audio_stream>
-            <Loop_PG_textST_stream>
 {all_sub_streams_final}
-            </Loop_PG_textST_stream>
             <Loop_IG_stream />
             <Loop_secondary_audio_stream />
             <Loop_secondary_video_stream />
 {dv_noss_final}
           </STN_table>
-        </PlayItem>
-{append_play_items}
-{all_info_number_of_SubPaths_final}
+        </PlayItem>{append_play_items}{all_info_number_of_SubPaths_final}
     </PlayList>
     <Loop_padding_word_2 />
     <PlayListMark>
@@ -533,7 +523,7 @@ def maked_playlist(in_time, out_time, out_tc_dv, value_chap, timestamps, sct, vf
 
 def maked_clip(fu, in_time, out_time, timestamps, v_ves_path, dv_ves_path, sct, vfv, vfps, a_ves_paths, s_pes_paths, aci_list, apt_list, sf_list, adps_list, ca_list, bps_list, v_idc, lidc, frame_mbs_only_flag, long_GOP,
                dts_stream_type_value_list, ast_value_list, src_value_list, bsid_value_list, brc_value_list, dsurmod_value_list, bsmod_value_list, nc_value_list, full_svc_value_list, langcod_value_list, langcod2_value_list, mainid_value_list, asvcflags_value_list, tcflag_value_list, mlp_sampling_rate_value_list,
-               a_ves_pid_list, pg_all_value_list, cri_present_flag, dynamic_range_type, colour_primaries, HDR10plus_present_flag, sct_dv_value, video_dv_format_code, fps_code_0_dv, cpf_value_mode_dv, color_space_dv, dynamic_range_type_dv, hdr10pf_value_mode_dv, nosip, all_group_results, mp):
+               a_ves_pid_list, pg_all_value_list, cri_present_flag, dynamic_range_type, colour_primaries, HDR10plus_present_flag, sct_dv_value, video_dv_format_code, fps_code_0_dv, cpf_value_mode_dv, color_space_dv, dynamic_range_type_dv, hdr10pf_value_mode_dv, nosip, all_group_results, mp, ain_value=None):
 
     # Output
     TSIntermediate = r"Output\MUX\BDROM\TSIntermediate\88888"
@@ -548,6 +538,16 @@ def maked_clip(fu, in_time, out_time, timestamps, v_ves_path, dv_ves_path, sct, 
             append_clip_id = 88889 + append_idx
             append_ts_dir = os.path.join(mp, r"Output\MUX\BDROM\TSIntermediate", str(append_clip_id))
             os.makedirs(append_ts_dir, exist_ok=True)
+
+    # Guard against None for optional tracks
+    if a_ves_paths is None:
+        a_ves_paths = []
+    if s_pes_paths is None:
+        s_pes_paths = []
+    if a_ves_pid_list is None:
+        a_ves_pid_list = []
+    if pg_all_value_list is None:
+        pg_all_value_list = []
 
     a_pid = ""
     s_pid = ""
@@ -564,9 +564,15 @@ def maked_clip(fu, in_time, out_time, timestamps, v_ves_path, dv_ves_path, sct, 
         a, _ = os.path.splitext(a_ves_path)
         a_mui_path = a + ".mui"
 
+        ain_psts = (
+            f"                <stream_presentation_start_time>{ain_value}</stream_presentation_start_time>\n"
+            if ain_value is not None else ""
+        )
+
         block_a = (
               f"              <ESData_TS>\n"
               f"                <stream_PID>{a_pid}</stream_PID>\n"
+              f"{ain_psts}"
               f"                <VES_InputFilename>{a_ves_path}</VES_InputFilename>\n"
               f"                <MUI_InputFilename>{a_mui_path}</MUI_InputFilename>\n"
               f"                <ESData_RwBufferSize>10240</ESData_RwBufferSize>\n"
@@ -659,13 +665,16 @@ def maked_clip(fu, in_time, out_time, timestamps, v_ves_path, dv_ves_path, sct, 
     dv_ves_all_info = ''
 
     if v_ves_path:
-        syys = f"""<ESData_TS>
-                <stream_PID>4113</stream_PID>
-                <VES_InputFilename>{v_ves_path}</VES_InputFilename>
-                <MUI_InputFilename>{v_mui_path}</MUI_InputFilename>
-                <ESData_RwBufferSize>10240</ESData_RwBufferSize>
-              </ESData_TS>"""
-         
+        syys = (
+              f"<ESData_TS>\n"
+                f"                <stream_PID>4113</stream_PID>\n"
+                f"                <VES_InputFilename>{v_ves_path}</VES_InputFilename>\n"
+                f"                <MUI_InputFilename>{v_mui_path}</MUI_InputFilename>\n"
+                f"                <ESData_RwBufferSize>10240</ESData_RwBufferSize>\n"
+              f"              </ESData_TS>\n"
+         )
+
+
         sip_v = f"""  <streams_in_ps>
               <stream_PID>4113</stream_PID>
               <StreamCodingInfo>
@@ -927,6 +936,9 @@ def maked_clip(fu, in_time, out_time, timestamps, v_ves_path, dv_ves_path, sct, 
             group_presentation_start_time = group_data.get('presentation_start_time', '0')
             group_presentation_end_time = group_data.get('presentation_end_time', '0')
             group_encoding_info = group_data.get('encoding_info', {})
+            group_audio_encoding_info = group_data.get('audio_encoding_info', {})
+            group_ain = group_data.get('ain', None)
+            group_sin = group_data.get('sin', None)
             
             # Extract encoding info from group result
             group_f = group.get('f', '')
@@ -944,20 +956,65 @@ def maked_clip(fu, in_time, out_time, timestamps, v_ves_path, dv_ves_path, sct, 
                 # Use the encoding info from args_parser for this specific group
                 # The key names from args_parser are different from the tuple names
                 group_vfc = group_encoding_info.get('video_format_code', '6')
+                group_sct = group_encoding_info.get('stream_coding_type', '1B')
                 group_API = group_encoding_info.get('profile_idc', '100')
                 group_li = group_encoding_info.get('level_idc', '41')
                 group_fmof = group_encoding_info.get('frame_mbs_only_flag', True)
                 group_lg = group_encoding_info.get('long_GOP', False)
-                # For audio, use the same hardcoded values since we're using the same source files
-                group_bsid = [6] if group_a else []
-                group_dsurmod = [0] if group_a else []
-                group_bsmod = [0] if group_a else []
-                group_full_svc = [False] if group_a else []
-                group_langcod = [0] if group_a else []
-                group_langcod2 = [0] if group_a else []
-                group_mainid = [0] if group_a else []
-                group_asvcflags = [0] if group_a else []
-                group_mlp_sr = ['MLP_48KHZ'] if group_a else []
+                group_cri = group_encoding_info.get('cri_present_flag', 'false')
+                group_dynamic_range = group_encoding_info.get('dynamic_range_type', '0')
+                group_colour_primaries = group_encoding_info.get('colour_primaries', '1')
+                group_HDR10plus = group_encoding_info.get('HDR10plus_present_flag', 'false')
+                # For audio, use the actual encoding info from audio_encoding_info
+                group_aci = group_audio_encoding_info.get('aci_list') if group_audio_encoding_info else ['83']
+                group_apt = group_audio_encoding_info.get('apt_list') if group_audio_encoding_info else ['6']
+                group_sf = group_audio_encoding_info.get('sf_list') if group_audio_encoding_info else ['1']
+                group_adps = group_audio_encoding_info.get('adps_list') if group_audio_encoding_info and group_a else []
+                group_ca = group_audio_encoding_info.get('ca_list') if group_audio_encoding_info and group_a else []
+                group_bps = group_audio_encoding_info.get('bps_list') if group_audio_encoding_info and group_a else []
+                group_bsid = group_audio_encoding_info.get('bsid_list') if group_audio_encoding_info and group_a else [6]
+                group_brc = group_audio_encoding_info.get('brc_list') if group_audio_encoding_info and group_a else [18]
+                group_dsurmod = group_audio_encoding_info.get('dsurmod_list') if group_audio_encoding_info and group_a else [0]
+                group_bsmod = group_audio_encoding_info.get('bsmod_list') if group_audio_encoding_info and group_a else [0]
+                group_nc = group_audio_encoding_info.get('nc_list') if group_audio_encoding_info and group_a else [7]
+                group_full_svc = group_audio_encoding_info.get('full_svc_list') if group_audio_encoding_info and group_a else [False]
+                group_langcod = group_audio_encoding_info.get('langcod_list') if group_audio_encoding_info and group_a else [0]
+                group_langcod2 = group_audio_encoding_info.get('langcod2_list') if group_audio_encoding_info and group_a else [0]
+                group_mainid = group_audio_encoding_info.get('mainid_list') if group_audio_encoding_info and group_a else [0]
+                group_asvcflags = group_audio_encoding_info.get('asvcflags_list') if group_audio_encoding_info and group_a else [0]
+                group_mlp_sr = group_audio_encoding_info.get('mlp_sr_list') if group_audio_encoding_info and group_a else ['MLP_48KHZ']
+                group_ast = group_audio_encoding_info.get('ast_list') if group_audio_encoding_info and group_a else ['DLL_PRI']
+                group_src = group_audio_encoding_info.get('src_list') if group_audio_encoding_info and group_a else [0]
+                group_dts_stream_type = group_audio_encoding_info.get('dts_stream_type_list') if group_audio_encoding_info and group_a else ['']
+                # Ensure lists are not None
+                if group_aci is None: group_aci = ['83']
+                if group_apt is None: group_apt = ['6']
+                if group_sf is None: group_sf = ['1']
+                if group_adps is None: group_adps = []
+                if group_ca is None: group_ca = []
+                if group_bps is None: group_bps = []
+                if group_bsid is None: group_bsid = [6]
+                if group_brc is None: group_brc = [18]
+                if group_dsurmod is None: group_dsurmod = [0]
+                if group_bsmod is None: group_bsmod = [0]
+                if group_nc is None: group_nc = [7]
+                if group_full_svc is None: group_full_svc = [False]
+                if group_langcod is None: group_langcod = [0]
+                if group_langcod2 is None: group_langcod2 = [0]
+                if group_mainid is None: group_mainid = [0]
+                if group_asvcflags is None: group_asvcflags = [0]
+                if group_mlp_sr is None: group_mlp_sr = ['MLP_48KHZ']
+                if group_ast is None: group_ast = ['DLL_PRI']
+                if group_src is None: group_src = [0]
+                if group_dts_stream_type is None: group_dts_stream_type = ['']
+                # HEVC/DV related
+                group_sct_dv = group_encoding_info.get('sct_dv_value', '24')
+                group_video_dv_format = group_encoding_info.get('video_dv_format_code', '6')
+                group_fps_code_0_dv = group_encoding_info.get('fps_code_0_dv', '1')
+                group_cpf_mode_dv = group_encoding_info.get('cpf_value_mode_dv', 'false')
+                group_color_space_dv = group_encoding_info.get('color_space_dv', '1')
+                group_dynamic_range_dv = group_encoding_info.get('dynamic_range_type_dv', '0')
+                group_hdr10pf_mode_dv = group_encoding_info.get('hdr10pf_value_mode_dv', 'false')
             else:
                 # Fallback to unpacking from result tuple
                 (group_vfc, group_vfc_mode, group_sct, group_sct_mode, group_aci, group_apt, group_sf, 
@@ -977,26 +1034,42 @@ def maked_clip(fu, in_time, out_time, timestamps, v_ves_path, dv_ves_path, sct, 
             # Build ESData_TS blocks for this group
             esdata_blocks = []
             if group_f:
-                esdata_blocks.append(f'''              <ESData_TS>
-                <stream_PID>4113</stream_PID>
-                <VES_InputFilename>{group_f}</VES_InputFilename>
-                <MUI_InputFilename>{group_f.replace('.ves', '.mui')}</MUI_InputFilename>
-                <ESData_RwBufferSize>10240</ESData_RwBufferSize>
-              </ESData_TS>''')
+                esdata_blocks.append(
+                    f"              <ESData_TS>\n"
+                    f"                <stream_PID>4113</stream_PID>\n"
+                    f"                <VES_InputFilename>{group_f}</VES_InputFilename>\n"
+                    f"                <MUI_InputFilename>{group_f.replace('.ves', '.mui')}</MUI_InputFilename>\n"
+                    f"                <ESData_RwBufferSize>10240</ESData_RwBufferSize>\n"
+                    f"              </ESData_TS>"
+                )
             
+            # Convert ain to stream_presentation_start_time if available
+            group_tc_starttimecode = group_data.get('encoding_info', {}).get('tc_start_timecode', '00:00:00:00')
+            group_ain_value = None
+            if group_ain:
+                ain_timecode = group_ain
+                ain_result = pg(ain_timecode, group_tc_starttimecode, ves_path=group_f)
+                if ain_result:
+                    group_ain_value = ain_result.get('value', None)
+            
+            audio_pid_es = 4352
             for audio_file in group_a:
-                esdata_blocks.append(f'''              <ESData_TS>
-                <stream_PID>4352</stream_PID>
-                <VES_InputFilename>{audio_file}</VES_InputFilename>
-                <MUI_InputFilename>{audio_file.replace('.ves', '.mui')}</MUI_InputFilename>
-                <ESData_RwBufferSize>10240</ESData_RwBufferSize>
-              </ESData_TS>''')
+                esdata_blocks.append(
+                    f"              <ESData_TS>\n"
+                    f"                <stream_PID>{audio_pid_es}</stream_PID>\n"
+                    f"                <stream_presentation_start_time>{group_ain_value}</stream_presentation_start_time>\n"
+                    f"                <VES_InputFilename>{audio_file}</VES_InputFilename>\n"
+                    f"                <MUI_InputFilename>{audio_file.replace('.ves', '.mui')}</MUI_InputFilename>\n"
+                    f"                <ESData_RwBufferSize>10240</ESData_RwBufferSize>\n"
+                    f"              </ESData_TS>"
+                )
+                audio_pid_es += 1
             
             # Generate subtitle PIDs for this group (starting from 4608)
             sub_pid = 4608
             for sub_file in group_s:
                 # Get pg_value from pg_all_value_list
-                pg_value = "0"
+                pg_value = "54000000"
                 for (s_pid, s_path, lang, sin_timecode, pg_val) in group_pg_all_value_list:
                     if s_path == sub_file:
                         pg_value = pg_val
@@ -1006,14 +1079,16 @@ def maked_clip(fu, in_time, out_time, timestamps, v_ves_path, dv_ves_path, sct, 
                 s_mui_path = sub_file + ".mui"
                 if not os.path.exists(s_mui_path):
                     raise FileNotFoundError(f"MUI file not found: {s_mui_path}")
-                
-                esdata_blocks.append(f'''              <ESData_TS>
-                <stream_PID>{sub_pid}</stream_PID>
-                <stream_presentation_start_time>{pg_value}</stream_presentation_start_time>
-                <VES_InputFilename>{sub_file}</VES_InputFilename>
-                <MUI_InputFilename>{s_mui_path}</MUI_InputFilename>
-                <ESData_RwBufferSize>10240</ESData_RwBufferSize>
-              </ESData_TS>''')
+
+                esdata_blocks.append(
+                    f"              <ESData_TS>\n"
+                    f"                <stream_PID>{sub_pid}</stream_PID>\n"
+                    f"                <stream_presentation_start_time>{pg_value}</stream_presentation_start_time>\n"
+                    f"                <VES_InputFilename>{sub_file}</VES_InputFilename>\n"
+                    f"                <MUI_InputFilename>{s_mui_path}</MUI_InputFilename>\n"
+                    f"                <ESData_RwBufferSize>10240</ESData_RwBufferSize>\n"
+                    f"              </ESData_TS>"
+                )
                 sub_pid += 1
             
             esdata_section = "\n".join(esdata_blocks) if esdata_blocks else ""
@@ -1021,12 +1096,29 @@ def maked_clip(fu, in_time, out_time, timestamps, v_ves_path, dv_ves_path, sct, 
             # Build StreamCodingInfo blocks dynamically based on actual encoding info
             stream_coding_blocks = []
             
-            # Video stream coding info
+            # Video stream coding info - choose format based on stream_coding_type
             if group_f:
+                if group_sct == '24':
+                    # HEVC video stream
+                    video_stream_content = f'''<HEVC_video_stream>
+                        <cri_present_flag>{group_cri}</cri_present_flag>
+                        <dynamic_range_type>{group_dynamic_range}</dynamic_range_type>
+                        <color_space>{group_colour_primaries}</color_space>
+                        <HDR10plus_present_flag>{group_HDR10plus}</HDR10plus_present_flag>
+                      </HEVC_video_stream>'''
+                else:
+                    # MPEG4/AVC video stream (default for '1B' or other)
+                    video_stream_content = f'''<MPEG4_video_stream>
+                        <profile_idc>{group_API}</profile_idc>
+                        <level_idc>{group_li}</level_idc>
+                        <frame_mbs_only_flag>{str(group_fmof).lower()}</frame_mbs_only_flag>
+                        <long_GOP>{str(group_lg).lower()}</long_GOP>
+                      </MPEG4_video_stream>'''
+                
                 stream_coding_blocks.append(f'''            <streams_in_ps>
               <stream_PID>4113</stream_PID>
               <StreamCodingInfo>
-                <stream_coding_type>1B</stream_coding_type>
+                <stream_coding_type>{group_sct}</stream_coding_type>
                 <Select_stream_coding_type>
                   <Video_stream>
                     <video_format>{group_vfc}</video_format>
@@ -1040,12 +1132,7 @@ def maked_clip(fu, in_time, out_time, timestamps, v_ves_path, dv_ves_path, sct, 
                       <recording_number />
                     </ISRC>
                     <Select_Video_stream>
-                      <MPEG4_video_stream>
-                        <profile_idc>{group_API}</profile_idc>
-                        <level_idc>{group_li}</level_idc>
-                        <frame_mbs_only_flag>{str(group_fmof).lower()}</frame_mbs_only_flag>
-                        <long_GOP>{str(group_lg).lower()}</long_GOP>
-                      </MPEG4_video_stream>
+                    {video_stream_content}
                     </Select_Video_stream>
                   </Video_stream>
                 </Select_stream_coding_type>
@@ -1053,16 +1140,76 @@ def maked_clip(fu, in_time, out_time, timestamps, v_ves_path, dv_ves_path, sct, 
             </streams_in_ps>''')
             
             # Audio stream coding info
+            audio_pid = 4352
             for i, audio_file in enumerate(group_a):
                 audio_lang = group_alang[i] if i < len(group_alang) else 'und'
+                aci_code = group_aci[i] if i < len(group_aci) else '83'
+                apt_val = group_apt[i] if i < len(group_apt) else '6'
+                sf_val = group_sf[i] if i < len(group_sf) else '1'
+                
+                # Build audio stream content based on audio coding type
+                if aci_code == '80':
+                    # LPCM audio
+                    adps_val = group_adps[i] if i < len(group_adps) else 1920
+                    ca_val = group_ca[i] if i < len(group_ca) else 1
+                    bps_val = group_bps[i] if i < len(group_bps) else 1
+                    audio_stream_content = f'''<LPCM_audio>
+                        <audio_data_payload_size>{adps_val}</audio_data_payload_size>
+                        <channel_assignment>{ca_val}</channel_assignment>
+                        <bits_per_sample>{bps_val}</bits_per_sample>
+                      </LPCM_audio>'''
+                elif aci_code in ['82', '85', '86']:
+                    # DTS audio
+                    dts_type = group_dts_stream_type[i] if i < len(group_dts_stream_type) else ''
+                    audio_stream_content = f'''<DTS_audio>
+                        <dts_stream_type>{dts_type}</dts_stream_type>
+                      </DTS_audio>'''
+                elif aci_code in ['81', '83', '84']:
+                    # AC3 audio (81, 83, 84)
+                    ast_val = group_ast[i] if i < len(group_ast) else 'DLL_PRI'
+                    src_val = group_src[i] if i < len(group_src) else '0'
+                    bsid_val = group_bsid[i] if i < len(group_bsid) else 6
+                    brc_val = group_brc[i] if i < len(group_brc) else 18
+                    dsurmod_val = group_dsurmod[i] if i < len(group_dsurmod) else 0
+                    bsmod_val = group_bsmod[i] if i < len(group_bsmod) else 0
+                    nc_val = group_nc[i] if i < len(group_nc) else 7
+                    full_svc_val = str(group_full_svc[i] if i < len(group_full_svc) else False).lower()
+                    langcod_val = group_langcod[i] if i < len(group_langcod) else 0
+                    langcod2_val = group_langcod2[i] if i < len(group_langcod2) else 0
+                    mainid_val = group_mainid[i] if i < len(group_mainid) else 0
+                    asvcflags_val = group_asvcflags[i] if i < len(group_asvcflags) else 0
+                    mlp_val = group_mlp_sr[i] if i < len(group_mlp_sr) else 'MLP_48KHZ'
+                    
+                    mlp_tag = f'\n                        <mlp_sampling_rate>{mlp_val}</mlp_sampling_rate>' if aci_code == '83' else ''
+                    
+                    audio_stream_content = f'''<AC3_audio>
+                        <ac3_stream_type>{ast_val}</ac3_stream_type>
+                        <sample_rate_code>{src_val}</sample_rate_code>
+                        <bsid>{bsid_val}</bsid>
+                        <bit_rate_code>{brc_val}</bit_rate_code>
+                        <dsurmod>{dsurmod_val}</dsurmod>
+                        <bsmod>{bsmod_val}</bsmod>
+                        <num_channels>{nc_val}</num_channels>
+                        <full_svc>{full_svc_val}</full_svc>
+                        <langcod>{langcod_val}</langcod>
+                        <langcod2>{langcod2_val}</langcod2>
+                        <mainid>{mainid_val}</mainid>
+                        <asvcflags>{asvcflags_val}</asvcflags>
+                        <text_code>false</text_code>
+                        <text />{mlp_tag}
+                      </AC3_audio>'''
+                else:
+                    # Unknown audio type, use AC3 as fallback
+                    audio_stream_content = ''
+                
                 stream_coding_blocks.append(f'''            <streams_in_ps>
-              <stream_PID>4352</stream_PID>
+              <stream_PID>{audio_pid}</stream_PID>
               <StreamCodingInfo>
-                <stream_coding_type>83</stream_coding_type>
+                <stream_coding_type>{aci_code}</stream_coding_type>
                 <Select_stream_coding_type>
                   <Audio_stream>
-                    <audio_presentation_type>6</audio_presentation_type>
-                    <sampling_frequency>1</sampling_frequency>
+                    <audio_presentation_type>{apt_val}</audio_presentation_type>
+                    <sampling_frequency>{sf_val}</sampling_frequency>
                     <audio_language_code>{audio_lang}</audio_language_code>
                     <ISRC>
                       <country_code />
@@ -1071,28 +1218,13 @@ def maked_clip(fu, in_time, out_time, timestamps, v_ves_path, dv_ves_path, sct, 
                       <recording_number />
                     </ISRC>
                     <Select_Audio_stream>
-                      <AC3_audio>
-                        <ac3_stream_type>DLL_PRI</ac3_stream_type>
-                        <sample_rate_code>0</sample_rate_code>
-                        <bsid>{group_bsid[i] if i < len(group_bsid) else 6}</bsid>
-                        <bit_rate_code>18</bit_rate_code>
-                        <dsurmod>{group_dsurmod[i] if i < len(group_dsurmod) else 0}</dsurmod>
-                        <bsmod>{group_bsmod[i] if i < len(group_bsmod) else 0}</bsmod>
-                        <num_channels>7</num_channels>
-                        <full_svc>{str(group_full_svc[i] if i < len(group_full_svc) else False).lower()}</full_svc>
-                        <langcod>{group_langcod[i] if i < len(group_langcod) else 0}</langcod>
-                        <langcod2>{group_langcod2[i] if i < len(group_langcod2) else 0}</langcod2>
-                        <mainid>{group_mainid[i] if i < len(group_mainid) else 0}</mainid>
-                        <asvcflags>{group_asvcflags[i] if i < len(group_asvcflags) else 0}</asvcflags>
-                        <text_code>false</text_code>
-                        <text />
-                        <mlp_sampling_rate>{group_mlp_sr[i] if i < len(group_mlp_sr) else 'MLP_48KHZ'}</mlp_sampling_rate>
-                      </AC3_audio>
+                    {audio_stream_content}
                     </Select_Audio_stream>
                   </Audio_stream>
                 </Select_stream_coding_type>
               </StreamCodingInfo>
             </streams_in_ps>''')
+                audio_pid += 1
             
             # Subtitle stream coding info
             sub_pid = 4608
@@ -1119,8 +1251,7 @@ def maked_clip(fu, in_time, out_time, timestamps, v_ves_path, dv_ves_path, sct, 
             
             stream_coding_section = "\n".join(stream_coding_blocks) if stream_coding_blocks else ""
             
-            clpi_block = f"""
-  <CLPI FileName="{idx}">
+            clpi_block = f"""  <CLPI FileName="{idx}">
     <type_indicator>HDMV</type_indicator>
     <version_number>0300</version_number>
     <ClipInfo>
@@ -1202,9 +1333,19 @@ def maked_clip(fu, in_time, out_time, timestamps, v_ves_path, dv_ves_path, sct, 
       <TS_M2TS_output_RwBufferSize>10240</TS_M2TS_output_RwBufferSize>
     </M2TSDirectoryList>
   </CLPI>"""
-            clpi_append_blocks.append(clpi_block.lstrip('\n'))
+
+            clpi_append_blocks.append(clpi_block)
     
     clpi_append = "\n".join(clpi_append_blocks)
+
+    if not clpi_append:
+      clpi_append = ""
+    else:
+      clpi_append = "\n" + clpi_append.rstrip('\n')
+    
+    stream_parts = [sip_v, audio_stream, all_streams_in_ps, dv_ves_all_info]
+    stream_parts = [p.rstrip() for p in stream_parts if p and p.strip()]
+    stream_content = "\n".join(stream_parts)
     
     xml_template = f"""
 <?xml version="1.0" encoding="UTF-8"?>
@@ -1235,7 +1376,7 @@ def maked_clip(fu, in_time, out_time, timestamps, v_ves_path, dv_ves_path, sct, 
             <STC_sequence>
               <presentation_start_time>{in_time}</presentation_start_time>
               <presentation_end_time>{out_time}</presentation_end_time>
-              {syys}\n{apid}{dv_ves_block}
+              {syys}{apid}{dv_ves_block}
             </STC_sequence>
           </Loop_STC_sequence>
         </ATC_sequence>
@@ -1250,7 +1391,7 @@ def maked_clip(fu, in_time, out_time, timestamps, v_ves_path, dv_ves_path, sct, 
           <program_map_PID>256</program_map_PID>
           <number_of_streams_in_ps>{nosip}</number_of_streams_in_ps>
           <Loop_stream_in_ps>
-          {sip_v}\n{audio_stream}\n{all_streams_in_ps}{dv_ves_all_info}
+          {stream_content}
           </Loop_stream_in_ps>
         </program_sequences>
       </Loop_program_sequences>
@@ -1290,10 +1431,8 @@ def maked_clip(fu, in_time, out_time, timestamps, v_ves_path, dv_ves_path, sct, 
       <TS_M2TS_output_dir>{mp}{fu}{STREAM}</TS_M2TS_output_dir>
       <TS_M2TS_output_RwBufferSize>10240</TS_M2TS_output_RwBufferSize>
     </M2TSDirectoryList>
-  </CLPI>
-{clpi_append}
-</CLIPDescriptorFile>
-""".strip()
+  </CLPI>{clpi_append}
+</CLIPDescriptorFile>""".strip()
 
     # Validate XML template before returning
     import re

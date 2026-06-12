@@ -18,6 +18,35 @@ def parse_duration_from_ves_file(file_path):
                 else:
                     print(f"Error: Unsupported Frame Rate: {fps_value}")
 
+        elif ext == '.txt':
+            timecodes = []
+            for line in file:
+                line = line.strip()
+                
+                if not line:
+                    print("Error: Empty line found in TXT file")
+                    return None
+                
+                if not re.match(r'^\d{2}:\d{2}:\d{2}\.\d{3}$', line):
+                    print(f"Error: Invalid timecode format: {line}")
+                    return None
+                
+                timecodes.append(line)
+            
+            if len(timecodes) == 0:
+                print("Error: TXT file contains no valid timecodes")
+                return None
+            
+            total_ms = 0
+            for tc in timecodes:
+                ms = timecode_to_ms(tc)
+                if ms is None:
+                    print(f"Error: Failed to parse timecode: {tc}")
+                    return None
+                total_ms += ms
+            
+            return total_ms
+
         elif ext == '.ves':
             file.seek(0)
             content = file.read()
@@ -38,6 +67,76 @@ def parse_duration_from_ves_file(file_path):
              return None
      
         return fps_mode_0
+
+def correct_offset_generator_29_97():
+    current = 1
+    while True:
+        for _ in range(8):
+            yield current, "Odd"
+            current += 1
+
+        current = current - 1 + 1
+        for _ in range(3):
+            yield current, "Median"
+            current += 1
+
+        for _ in range(5):
+            yield current, "Even"
+            current += 1
+
+        current = current - 1 + 1
+        for _ in range(3):
+            yield current, "Median"
+            current += 1
+
+        for _ in range(5):
+            yield current, "Odd"
+            current += 1
+
+        while True:
+            current = current - 1 + 1
+            for _ in range(3):
+                yield current, "Median"
+                current += 1
+
+            for _ in range(5):
+                yield current, "Even"
+                current += 1
+
+def correct_offset_generator_25():
+    current = 1
+    while True:
+        for _ in range(8):
+            yield current, "Odd"
+            current += 1
+
+        current = current - 1 + 1
+        for _ in range(3):
+            yield current, "Median"
+            current += 1
+
+        for _ in range(5):
+            yield current, "Even"
+            current += 1
+
+        current = current - 1 + 1
+        for _ in range(3):
+            yield current, "Median"
+            current += 1
+
+        for _ in range(5):
+            yield current, "Odd"
+            current += 1
+
+        while True:
+            current = current - 1 + 1
+            for _ in range(3):
+                yield current, "Median"
+                current += 1
+
+            for _ in range(5):
+                yield current, "Even"
+                current += 1
 
 def correct_offset_generator_24():
     current = 1
@@ -160,6 +259,16 @@ def timecode_to_value_verbose_tc(timecode, fps=24, base=27000000, per_frame=1874
         print(f"[TC Start]{timecode} = {base} + {per_frame} * {total_frames} + offset{extra}（{offset_type}）= {result}")
     return result
 
+def timecode_to_ms(tc_str):
+    try:
+        hours, minutes, sec_ms = tc_str.strip().split(':')
+        sec_parts = sec_ms.split('.')
+        seconds = int(sec_parts[0])
+        milliseconds = int(sec_parts[1]) if len(sec_parts) > 1 else 0
+        return (int(hours) * 3600 + int(minutes) * 60 + seconds) * 1000 + milliseconds
+    except (ValueError, IndexError):
+        return None
+
 def timecode_to_value_verbose(timecode, tc_start="00:00:00:00", fps=24, base=27000000, per_frame_24=1874 , per_frame_23_98=1875, fps_mode_value=None):
     hh, mm, ss, ff = map(int, timecode.strip().split(":"))
     total_frames_23_98 = ((hh * 3600 + mm * 60 + ss) * fps + ff)
@@ -205,8 +314,26 @@ def timecode_to_value_verbose(timecode, tc_start="00:00:00:00", fps=24, base=270
 
     return result_23_98, result_24
 
+def mstovalue(ms, tc_start_timecode=None):
+    if ms is None or ms < 0:
+        return None
+    if ms == 0:
+        if tc_start_timecode:
+            value = timecode_to_value_verbose_tc(tc_start_timecode, verbose=False)
+        else:
+            value = 27000000
+    elif tc_start_timecode:
+        tc_result = timecode_to_value_verbose_tc(tc_start_timecode, verbose=False)
+        value = 45 + (ms - 1) * 45 + tc_result
+    else:
+        value = 27000045 + (ms - 1) * 45
+    return value
+
 def is_valid_timecode(start_tc):
     return re.match(r'^\d{2}:\d{2}:\d{2}:\d{2}$', start_tc) is not None
+
+def is_valid_timecode_ms(tc_str):
+    return re.match(r'^\d{2}:\d{2}:\d{2}\.\d{3}$', tc_str) is not None
 
 def args_parser_value(*, file_path=None, single_timecode=None, ves_path=None, tc_start_timecode=None):
     results = []
@@ -219,24 +346,47 @@ def args_parser_value(*, file_path=None, single_timecode=None, ves_path=None, tc
         else:
             results.append(f"{tc} = Unsupported FPS Mode")
 
-    if file_path and ves_path:
-        fps_mode = parse_duration_from_ves_file(ves_path)
-        if fps_mode is None:
-            print(f"Erro: Unknown Frame Rate: {fps_mode}")
-            return results
+    def log_output_ms(tc, value):
+        if value is not None:
+            results.append(f"{tc} = {value}")
+        else:
+            results.append(f"{tc} = Invalid")
 
-        with open(file_path, newline='', encoding='utf-8') as csvfile:
-            reader = csv.reader(csvfile)
-            for row in reader:
-                if not row or len(row) <= 2:
-                    continue
+    if file_path:
+        ext = os.path.splitext(file_path)[1].lower()
+        
+        if ext == '.csv':
+            if not ves_path:
+                print(f"Error: .csv file requires ves_path")
+                return results
+            fps_mode = parse_duration_from_ves_file(ves_path)
+            if fps_mode is None:
+                print(f"Error: Unknown Frame Rate: {fps_mode}")
+                return results
 
-                for tc in row[2:]:
-                    tc = tc.strip()
-                    if is_valid_timecode(tc):
-                        value = timecode_to_value_verbose(tc, tc_start=tc_start_timecode, fps_mode_value=fps_mode)
-                        log_output(tc, value, fps_mode)
-                    else:
+            with open(file_path, newline='', encoding='utf-8') as csvfile:
+                reader = csv.reader(csvfile)
+                for row in reader:
+                    if not row or len(row) <= 2:
+                        continue
+
+                    for tc in row[2:]:
+                        tc = tc.strip()
+                        if is_valid_timecode(tc):
+                            value = timecode_to_value_verbose(tc, tc_start=tc_start_timecode, fps_mode_value=fps_mode)
+                            log_output(tc, value, fps_mode)
+                        else:
+                            print(f"Invalid timecode format: {tc}")
+        
+        elif ext == '.txt':
+            with open(file_path, 'r', encoding='utf-8') as txtfile:
+                for line in txtfile:
+                    tc = line.strip()
+                    if tc and is_valid_timecode_ms(tc):
+                        ms = timecode_to_ms(tc)
+                        value = mstovalue(ms, tc_start_timecode)
+                        log_output_ms(tc, value)
+                    elif tc:
                         print(f"Invalid timecode format: {tc}")
 
     elif single_timecode and ves_path:
@@ -250,7 +400,16 @@ def args_parser_value(*, file_path=None, single_timecode=None, ves_path=None, tc
             log_output(single_timecode, value, fps_mode)
         else:
             print(f"Invalid Timecode Format：{single_timecode}")
+    
+    elif single_timecode and not ves_path:
+        if is_valid_timecode_ms(single_timecode):
+            ms = timecode_to_ms(single_timecode)
+            value = mstovalue(ms, tc_start_timecode)
+            log_output_ms(single_timecode, value)
+        else:
+            print(f"Invalid Timecode Format：{single_timecode}")
+    
     else:
-        results.append("least arguments: -t and -d; If ues -d then is -f required")
+        results.append("least arguments: -t and -d; If uses -d then -f is required (for .csv files)")
 
     return results

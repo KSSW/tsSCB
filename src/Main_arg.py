@@ -29,9 +29,9 @@ from datetime import datetime
 from ecq import aut
 from times import args_parser
 from readpes import sin
-from mhz import args_parser_value
+from mhz_ms_ues import args_parser_value
 from bxml import maked_clip, maked_playlist, maked_fsdescriptor, maked_indextable, maked_movieobject, maked_projectdefinition
-from pgtc import pg
+from pgtc_ms_ues import pg
 from aacs import hxd_bin # NOQA
 # from btFy13pd5uf4WC4h18 import lSfgApatkdxsVcGcrktoFd
 
@@ -66,12 +66,14 @@ def chapter(tc_start_timecode, file_path, ves_path, dv_ves_file, avf_file, avf_f
 
         sys.stdout = io.StringIO()
 
-        result_mhz_chap = args_parser_value(file_path=file_path, ves_path=ves_path, tc_start_timecode=tc_start_timecode)
+        ext = os.path.splitext(file_path)[1].lower()
 
+        result_mhz_chap = args_parser_value(file_path=file_path, ves_path=ves_path, tc_start_timecode=tc_start_timecode)
+        
         sys.stdout = stdout
 
         if not result_mhz_chap:
-            print("Error: No Result")
+            print(f"Error: No Result, Check {file_path}...")
             return None
 
         output_text = '\n'.join(result_mhz_chap)
@@ -92,8 +94,10 @@ def parse_duration_from_ves_file(file_path, ves_file, dv_ves_file, avf_file, avf
    
     if file_path:
         ext = os.path.splitext(args.t)[1].lower()
-        if ext != ".csv":
-            print(f"Error: {args.t}, File must be .csv")
+        if ext == ".txt":
+            fps_value = None
+        elif ext != ".csv":
+            print(f"Error: {file_path}, File must be .csv or .txt")
             sys.exit(1)
 
         try:
@@ -382,6 +386,8 @@ def parse_duration_from_ves_file(file_path, ves_file, dv_ves_file, avf_file, avf
 
             if not fps_value:
                 fps_value = fps_mode_0
+            elif file_path.endswith(".txt"):
+                fps_value = fps_mode_0
 
             if fps_value != fps_mode_0:
                 print(f"Error: Frame Rate Mismatched!")
@@ -552,6 +558,11 @@ def parse_duration_from_ves_file(file_path, ves_file, dv_ves_file, avf_file, avf
     if sct_value == "1B" and args.fdv:
         print("Error: H.264 codec don't want ues -fdv")
         sys.exit(1)
+
+    if avf_files is None:
+        avf_files = []
+    if ssf_file is None:
+        ssf_file = []
 
     for idx, avf_file in enumerate(avf_files):
         try:
@@ -766,46 +777,38 @@ def process_preid(preid_values, num_audios: int, num_subtitles: int):
 
     ida_1, ids_2 = map(int, parts)
 
-    if not (1 <= ida_1 + ids_2 <= 64):
-        print("Error: Max 32 Audio and Subtitle")
-        sys.exit(1)
+    # Only validate audio id when audio tracks are present
+    if num_audios > 0:
+        if not (1 <= ida_1 <= 32):
+            print("Error: Max 32 Audio")
+            sys.exit(1)
+        if ida_1 == 0:
+            print("Error: The Audio id cannot start from 0")
+            sys.exit(1)
+        if ida_1 > num_audios:
+            print(f"Error: The Audio id must be Audio track equal. audio id: {ida_1} audio quantity: {num_audios}")
+            sys.exit(1)
 
-    if not (1 <= ida_1 <= 32):
-        print("Error: Max 32 Audio")
-        sys.exit(1)
-
-    if not (1 <= ids_2 <= 32):
-        print("Error: Max 32 Subtitle")
-        sys.exit(1)
-
-    if ida_1 + ids_2 == int('0'):
-        print("Error: The Audio and Subtitle id cannot start from 0")
-        sys.exit(1)
-
-    if ida_1 == int('0'):
-        print("Error: The Audio id cannot start from 0")
-        sys.exit(1)
-
-    if ids_2 == int('0'):
-        print("Error: The Subtitle id cannot start from 0")
-        sys.exit(1)
-
-    if ida_1 <= 0 or ida_1 > num_audios:
-        print(f"Error: The Audio id must be Audio track equal. audio id: {ida_1} audio quantity: {num_audios}")
-        sys.exit(1)
-
-    if ids_2 <= 0 or ids_2 > num_subtitles:
-        print(f"Error: The Subtitle id must be Subtitle track equal. audio id: {ids_2} Subtitle quantity: {num_subtitles}")
-        sys.exit(1)
+    # Only validate subtitle id when subtitle tracks are present
+    if num_subtitles > 0:
+        if not (1 <= ids_2 <= 32):
+            print("Error: Max 32 Subtitle")
+            sys.exit(1)
+        if ids_2 == 0:
+            print("Error: The Subtitle id cannot start from 0")
+            sys.exit(1)
+        if ids_2 > num_subtitles:
+            print(f"Error: The Subtitle id must be Subtitle track equal. subtitle id: {ids_2} Subtitle quantity: {num_subtitles}")
+            sys.exit(1)
 
     ida_1, ids_2 = map(int, preid_values.split(':'))
 
-    id_1 = f"8{ida_1:03X}"
+    id_1 = f"8{ida_1:03X}" if num_audios > 0 else "8001"
 
-    id_2 = f"{ids_2:03X}"
+    id_2 = f"{ids_2:03X}" if num_subtitles > 0 else "001"
 
-    audio_idx = ida_1 - 1
-    sub_idx = ids_2 - 1
+    audio_idx = ida_1 - 1 if num_audios > 0 else 0
+    sub_idx = ids_2 - 1 if num_subtitles > 0 else 0
 
     return audio_idx, sub_idx, id_1, id_2
 
@@ -827,15 +830,19 @@ if __name__ == "__main__":
             
             # Add main arguments
             new_argv.extend(['-f', config['main']['video']])
-            new_argv.extend(['-a', config['main']['audio']])
-            new_argv.extend(['-s', config['main']['subtitle']])
+            if config['main'].get('audio'):
+                new_argv.extend(['-a', config['main']['audio']])
+            if config['main'].get('subtitle'):
+                new_argv.extend(['-s', config['main']['subtitle']])
             
             # Add append groups
             for group in config['append_groups']:
                 new_argv.append('-append')
                 new_argv.extend(['-f', group['video']])
-                new_argv.extend(['-a', group['audio']])
-                new_argv.extend(['-s', group['subtitle']])
+                if group.get('audio'):
+                    new_argv.extend(['-a', group['audio']])
+                if group.get('subtitle'):
+                    new_argv.extend(['-s', group['subtitle']])
             
             # Add other arguments from original command line (excluding --config and its value)
             skip_next = False
@@ -906,6 +913,12 @@ if __name__ == "__main__":
                 elif arg == '-slang' and i + 1 < len(sys.argv):
                     current_group['slang'].append(sys.argv[i + 1])
                     i += 2
+                elif arg == '-ain' and i + 1 < len(sys.argv):
+                    current_group['ain'] = sys.argv[i + 1]
+                    i += 2
+                elif arg == '-sin' and i + 1 < len(sys.argv):
+                    current_group['sin'] = sys.argv[i + 1]
+                    i += 2
                 else:
                     i += 1
             
@@ -937,7 +950,11 @@ if __name__ == "__main__":
     class CustomArgumentParser(argparse.ArgumentParser):
         def error(self, message):
             self.print_usage(sys.stderr)
-            self.exit(1, f"Error: {message}\n")
+            # If argparse sees tokens it does not recognise, those are almost
+            # always words that belong to a path containing spaces or special
+            # characters (e.g. Chinese) that the user forgot to quote in CMD.
+            sys.stderr.write(f"Error: {message}\n")
+            self.exit(1)
 
         def format_help(self):
             help_text = super().format_help()
@@ -963,14 +980,16 @@ if __name__ == "__main__":
         )
     parser.add_argument('-f', type=str, metavar='', required=True, help="Input Video VES File ( Supported videocodecs: H.264/AVC, H.265/HEVC )")
     parser.add_argument('-fdv', type=str, metavar='', help="Input Dolby Vision Enhancement Layer VES File ( Supported videocodecs: H.265/HEVC )")
-    parser.add_argument('-a', type=str, metavar='', action='append', required=True, help="Input Audio VES File ( Supported audiocodecs: AC3 / E-AC3(DD+), Dolby TrueHD, DTS/ DTS-HD, LPCM )")
+    parser.add_argument('-a', type=str, metavar='', action='append', help="Input Audio VES File ( Supported audiocodecs: AC3/E-AC3(DD+), Dolby TrueHD, DTS/DTS-HD, LPCM )")
+    parser.add_argument('-ain', type=str, metavar='', help="Set Audio IN Time, Set Delay relative to video; Support: Milliseconds and TimeCode (0 (ms) or 00:00:00:00)")
     parser.add_argument('-alang', type=str, metavar='', action='append', help="Set Audio Language, Default=und")
-    parser.add_argument('-s', type=str, metavar='', required=True, action='append', help="Input Subtitles VES File ( Supported Subtitlecodecs: Presentation Graphic Stream (.sup))")
-    parser.add_argument('-sin', type=str, metavar='', action='append', help=" Set IN Time Subtitles")
+    parser.add_argument('-s', type=str, metavar='', action='append', help="Input Subtitles VES File ( Supported Subtitlecodecs: Presentation Graphic Stream (.sup))")
+    parser.add_argument('-sin', type=str, metavar='', action='append', help=" Set IN Time Subtitles, Set Delay relative to video; Support: Milliseconds and TimeCode (0 (ms) or 00:00:00:00)")
     parser.add_argument('-slang', type=str, metavar='', action='append', help="Set Subtitles Language, Default=und")
     parser.add_argument('-preid', type=str, metavar='', default='1:1', help="Set Audio and Subtitle ID Default Track. Example: 1:1 (a:s)")
     parser.add_argument('-t', type=str, metavar='', help="Input CSV File ( Chapters Timecode ), default=00:00:00:00")
     parser.add_argument('-intime', type=str, metavar='', default='00:00:00:00', help="Set Video IN Time")
+    parser.add_argument('-outtime', type=str, metavar='', help="Set Video OUT Time")
     parser.add_argument('-off', choices=['tc'], help="Off Video Start TimeCode", metavar='')
     parser.add_argument('-tc', type=str, metavar='', help="Specify Video Start TimeCode")
     parser.add_argument('-append', action="store_true", help="Append Files (separator for multiple file groups)")
@@ -982,12 +1001,110 @@ if __name__ == "__main__":
     
     if '-h' in sys.argv or '--help' in sys.argv:
         parser.print_help()
-        sys.exit() 
+        sys.exit()
+
+    # -----------------------------------------------------------------------
+    # Pre-parse: auto-reconstruct space-split paths + detect CJK characters
+    # Runs BEFORE parse_args() so argparse receives clean, whole tokens.
+    #
+    # Problem: CMD splits unquoted paths on spaces, e.g.
+    #   -f H:\VIDEO\28.Years#00800 PID 4117.hevc.ves
+    # becomes three tokens: ["H:\\VIDEO\\28.Years#00800", "PID", "4117.hevc.ves"]
+    #
+    # Fix: for every known path flag, greedily join the following non-flag
+    # tokens with spaces until os.path.exists() returns True.
+    # After reconstruction, any path containing CJK characters is rejected.
+    # -----------------------------------------------------------------------
+    _PATH_FLAGS = {'-f', '-fdv', '-a', '-s', '-t', '-mux'}
+
+    def _has_cjk(s):
+        return any(
+            '\u4e00' <= ch <= '\u9fff' or
+            '\u3400' <= ch <= '\u4dbf' or
+            '\uf900' <= ch <= '\ufaff'
+            for ch in s
+        )
+
+    def _reconstruct_argv_paths(argv):
+        result = []
+        i = 0
+        while i < len(argv):
+            token = argv[i]
+            if token in _PATH_FLAGS and i + 1 < len(argv):
+                result.append(token)
+                i += 1
+                # Seed with the first token after the flag
+                candidate = argv[i]
+                i += 1
+                # Greedily absorb following non-flag tokens while the
+                # candidate path does not yet exist on disk.
+                while i < len(argv) and not argv[i].startswith('-'):
+                    if os.path.exists(candidate):
+                        break
+                    candidate += ' ' + argv[i]
+                    i += 1
+                # CJK check — error immediately
+                if _has_cjk(candidate):
+                    print(
+                        f"Error: Path contains Chinese (CJK) characters.\n"
+                        f"       Paths with Chinese characters are not supported.\n"
+                        f"       Please rename the file/folder to ASCII-only characters:\n"
+                        f"         {candidate}"
+                    )
+                    sys.exit(1)
+                result.append(candidate)
+            else:
+                result.append(token)
+                i += 1
+        return result
+
+    sys.argv = _reconstruct_argv_paths(sys.argv)
+
     args = parser.parse_args()
+
+    # -----------------------------------------------------------------------
+    # Pre-execution path validation
+    # Detects missing files caused by unquoted paths that contain spaces,
+    # Chinese characters, or other special characters in CMD.
+    # Must run BEFORE any further processing so the error is clear and early.
+    # -----------------------------------------------------------------------
+    def _validate_path(flag, path, must_exist=True):
+        if path is None:
+            return
+        # CJK check (safety net — _reconstruct_argv_paths already caught most)
+        if _has_cjk(path):
+            print(
+                f"Error: Path contains Chinese (CJK) characters.\n"
+                f"       Please rename to ASCII-only:\n"
+                f"         {flag} {path}"
+            )
+            sys.exit(1)
+        if must_exist and not os.path.exists(path):
+            hint = (
+                f'\n         If the path contains spaces, wrap it in double quotes:\n'
+                f'           {flag} "{path}"'
+            )
+            print(f"Error: File not found: {path}{hint}")
+            sys.exit(1)
+
+    # Validate all path arguments before any processing begins
+    _validate_path('-f',   args.f,   must_exist=True)
+    _validate_path('-fdv', args.fdv, must_exist=True)
+    if args.a:
+        for _ap in (args.a if isinstance(args.a, list) else [args.a]):
+            _validate_path('-a', _ap, must_exist=True)
+    if args.s:
+        for _sp in (args.s if isinstance(args.s, list) else [args.s]):
+            _validate_path('-s', _sp, must_exist=True)
+    # -mux: parent directory must already exist (subdirs are created by the tool)
+    if args.mux and not os.path.exists(os.path.dirname(os.path.abspath(args.mux)) or args.mux):
+        _validate_path('-mux', args.mux, must_exist=False)
+
     if len(sys.argv) > 1:
         encoded = aut()
         print(base64.b64decode(encoded).decode("utf-8"), end="\n\n")
-    pes_file_check_path(args.s)
+    if args.s:
+        pes_file_check_path(args.s)
 
     # Calculate count for main group only (since append groups were removed from sys.argv)
     count = 0
@@ -1001,7 +1118,7 @@ if __name__ == "__main__":
     
     file_path, ves_file, dv_ves_file, avf_file, ssf_file, preid_values = args.t, args.f, args.fdv, args.a, args.s, args.preid
 
-    (audio_idx, sub_idx, id_1, id_2) = process_preid(preid_values, len(args.a), len(args.s))
+    (audio_idx, sub_idx, id_1, id_2) = process_preid(preid_values, len(args.a) if args.a else 0, len(args.s) if args.s else 0)
 
     # MAIN CLIP: Parse timecodes first (original source logic)
     stdout = sys.stdout
@@ -1038,6 +1155,15 @@ if __name__ == "__main__":
     # (value_mhz must be called before parse_duration to get correct relative values)
     in_tc = value_mhz(tc_start_timecode, args.intime, None, args.f)
     out_tc = value_mhz(tc_start_timecode, timecode, None, args.f)
+
+    # -outtime: override the auto-detected OUT point with a user-specified timecode
+    if args.outtime:
+        _stdout = sys.stdout
+        sys.stdout = io.StringIO()
+        _out_tc_override = value_mhz(tc_start_timecode, args.outtime, None, args.f)
+        sys.stdout = _stdout
+        if _out_tc_override is not None:
+            out_tc = _out_tc_override
 
     if in_tc is None or out_tc is None:
         print("Error: value_mhz returned None for main clip")
@@ -1112,10 +1238,11 @@ if __name__ == "__main__":
             lang = group_subtitle_langs[i] if i < len(group_subtitle_langs) else 'und'
             # Try to get sin_timecode from MUI file (same as main clip logic)
             sin_timecode_g = "00:00:00:00"
+            sin_value_g = 0
             base_s, _ = os.path.splitext(s_path)
             mui_path_g = base_s + ".pes.mui"
             if os.path.exists(mui_path_g):
-                sin_timecode_g = sin(mui_path_g, s_path, fps=group_fps_val)
+                sin_timecode_g, sin_value_g = sin(mui_path_g, s_path, fps=group_fps_val)
             # Compute pg_value using pg() like the main clip
             _so = sys.stdout
             sys.stdout = io.StringIO()
@@ -1125,8 +1252,24 @@ if __name__ == "__main__":
                 pg_value_g = result_sin_g["value"]
             else:
                 pg_value_g = "0"
-            group_pg_all_value_list.append((pid, s_path, lang, sin_timecode_g, pg_value_g))
+            group_pg_all_value_list.append((pid, s_path, lang, sin_timecode_g, pg_value_g, sin_value_g))
             pid += 1
+
+        # Unpack audio encoding info from group_result
+        (group_aci_list, group_apt_list, group_sf_list, group_adps_list, group_ca_list, group_bps_list,
+         group_audio_infos, group_ast_list, group_src_list, group_bsid_list, group_brc_list, group_dsurmod_list,
+         group_bsmod_list, group_nc_list, group_full_svc_list, group_langcod_list, group_langcod2_list,
+         group_mainid_list, group_asvcflags_list, group_tcflag_list, group_mlp_sr_list, group_dts_stream_type_list) = (
+            group_result[4], group_result[5], group_result[6], group_result[7], group_result[8], group_result[9],
+            group_result[10], group_result[17], group_result[18], group_result[19], group_result[20], group_result[21],
+            group_result[22], group_result[23], group_result[24], group_result[25], group_result[26],
+            group_result[27], group_result[28], group_result[29], group_result[30], group_result[16]
+        )
+        
+        # Ensure lists are not None
+        if group_adps_list is None: group_adps_list = []
+        if group_ca_list is None: group_ca_list = []
+        if group_bps_list is None: group_bps_list = []
 
         all_group_results.append({
             'group':                    group,
@@ -1141,6 +1284,32 @@ if __name__ == "__main__":
             's_langs':                  group_subtitle_langs,
             'in_tc':                    g_in_tc,
             'out_tc':                   g_out_tc,
+            'ain':                      group.get('ain', None),
+            'sin':                      group.get('sin', None),
+            'audio_encoding_info': {
+                'aci_list': group_aci_list,
+                'apt_list': group_apt_list,
+                'sf_list': group_sf_list,
+                'adps_list': group_adps_list,
+                'ca_list': group_ca_list,
+                'bps_list': group_bps_list,
+                'audio_infos': group_audio_infos,
+                'ast_list': group_ast_list,
+                'src_list': group_src_list,
+                'bsid_list': group_bsid_list,
+                'brc_list': group_brc_list,
+                'dsurmod_list': group_dsurmod_list,
+                'bsmod_list': group_bsmod_list,
+                'nc_list': group_nc_list,
+                'full_svc_list': group_full_svc_list,
+                'langcod_list': group_langcod_list,
+                'langcod2_list': group_langcod2_list,
+                'mainid_list': group_mainid_list,
+                'asvcflags_list': group_asvcflags_list,
+                'tcflag_list': group_tcflag_list,
+                'mlp_sr_list': group_mlp_sr_list,
+                'dts_stream_type_list': group_dts_stream_type_list,
+            },
         })
 
     fu = "\\"
@@ -1166,8 +1335,8 @@ if __name__ == "__main__":
     # MAIN CLIP: Audio / Subtitle paths
     # sys.argv is clean — args.a / args.s contain ONLY the main clip's files
     # -----------------------------------------------------------------------
-    a_ves_path = args.a if isinstance(args.a, list) else [args.a]
-    s_pes_path = args.s if isinstance(args.s, list) else [args.s]
+    a_ves_path = args.a if isinstance(args.a, list) else ([args.a] if args.a else [])
+    s_pes_path = args.s if isinstance(args.s, list) else ([args.s] if args.s else [])
     audio_langs = []
 
     if isinstance(args.sin, str):
@@ -1175,13 +1344,14 @@ if __name__ == "__main__":
     elif args.sin is not None and isinstance(args.sin, list):
         sin_list = args.sin
     else:
-        sin_list = ["00:00:00:00"] * len(s_pes_path)
+        sin_list = ["00:00:00:00"] * len(s_pes_path) if s_pes_path else []
 
     if isinstance(args.slang, str):
         subtitle_langs = [args.slang]
+    elif isinstance(args.slang, list):
+        subtitle_langs = args.slang
     else:
-        # Only use the first subtitle language for main CLPI
-        subtitle_langs = args.slang if isinstance(args.slang, list) else [args.slang]
+        subtitle_langs = []
 
     if args.alang:
         if len(a_ves_path) != len(args.alang):
@@ -1189,7 +1359,7 @@ if __name__ == "__main__":
             sys.exit(1)
         audio_langs = args.alang if isinstance(args.alang, list) else [args.alang]
     else:
-        audio_langs = ["und"] * len(a_ves_path)
+        audio_langs = ["und"] * len(a_ves_path) if a_ves_path else []
 
     if args.slang:
         if len(s_pes_path) != len(args.slang):
@@ -1197,7 +1367,7 @@ if __name__ == "__main__":
             sys.exit(1)
         subtitles_langs = subtitle_langs
     else:
-        subtitles_langs = ["und"] * len(s_pes_path)
+        subtitles_langs = ["und"] * len(s_pes_path) if s_pes_path else []
 
     # Order check on clean sys.argv
     a_index    = [i for i, arg in enumerate(sys.argv) if arg == '-a']
@@ -1218,25 +1388,42 @@ if __name__ == "__main__":
                 sin_map[prev_s_positions[-1]] = sys.argv[i + 1]
 
     sin_list_built = []
+    sin_value_list_built = []
     for idx, pes in enumerate(s_pes_path):
         base, _ = os.path.splitext(pes)
         mui_path = base + ".pes.mui"
         sin_value = sin_map.get(s_index[idx], None) if idx < len(s_index) else None
+        sin_ms_value = 0
         if not sin_value:
             if os.path.exists(mui_path):
-                sin_value = sin(mui_path, pes, fps=fps)
+                sin_value, sin_ms_value = sin(mui_path, pes, fps=fps, tc_start_timecode=tc_start_timecode)
             else:
                 sin_value = "00:00:00:00"
         sin_list_built.append(sin_value)
+        sin_value_list_built.append(sin_ms_value)
     # Prefer explicit -sin values, fallback to auto-detected
     if any(v != "00:00:00:00" for v in sin_list):
         pass  # user specified -sin, keep sin_list
     else:
         sin_list = sin_list_built
 
-    subtitles_lang_pairs = list(zip(s_pes_path, subtitle_langs, sin_list))
+    subtitles_lang_pairs = list(zip(s_pes_path, subtitle_langs, sin_list, sin_value_list_built))
 
     pg_all_value_list = []
+
+    # -----------------------------------------------------------------------
+    # Compute Audio IN Time value from -ain argument (HH:MM:SS:FF timecode)
+    # Same calculation logic as subtitle stream_presentation_start_time
+    # -----------------------------------------------------------------------
+    ain_value = None
+    if args.ain:
+        ain_timecode = args.ain
+        _stdout = sys.stdout
+        sys.stdout = io.StringIO()
+        result_ain = pg(ain_timecode, tc_start_timecode, ves_path=args.f)
+        sys.stdout = _stdout
+        if result_ain:
+            ain_value = result_ain["value"]
 
     audio_lang_pairs = list(zip(a_ves_path, audio_langs))
     dv_final_Warning = ''
@@ -1275,20 +1462,44 @@ if __name__ == "__main__":
     print("Primary Audio Info:")
     start_pid = int('4352')
     a_ves_pid_list = []
-    for idx, ((a_ves_path, lang), info) in enumerate(zip(audio_lang_pairs, audio_infos)):
-        pid = start_pid + idx
-        is_default = (idx == audio_idx)
-        print(f"                   PID: {pid} | Name: {os.path.basename(args.a[idx])} | {info} | File Path: {a_ves_path} | Language: {lang} | Default Track: {is_default}\n")
-        a_ves_pid_list.append((pid, a_ves_path, lang))
-        aci_list.append(info)
+    if audio_lang_pairs and audio_infos:
+        for idx, ((a_ves_path, lang), info) in enumerate(zip(audio_lang_pairs, audio_infos)):
+            pid = start_pid + idx
+            is_default = (idx == audio_idx)
+            if args.ain:
+                try:
+                    int(args.ain)
+                    ain_display = f"{args.ain} ms"
+                except (ValueError, TypeError):
+                    ain_display = args.ain
+            else:
+                ain_display = "00:00:00:00"
+            print(f"                   PID: {pid} | Name: {os.path.basename(args.a[idx])} | {info} | File Path: {a_ves_path} | Language: {lang} | IN TimeCode: {ain_display} | Default Track: {is_default}\n")
+            a_ves_pid_list.append((pid, a_ves_path, lang))
+            aci_list.append(info)
+    else:
+        print("                   N/A\n")
     if all_group_results:
         for gi, gd in enumerate(all_group_results, start=1):
             print(f"                   Append Track {gi}:")
-            for i, audio_file in enumerate(gd['a_ves_paths']):
-                lang = gd['a_langs'][i] if i < len(gd['a_langs']) else 'und'
-                print(f"                                  PID: 4352 | Name: {os.path.basename(audio_file)} | File Path: {audio_file} | Language: {lang} | Default Track: True")
+            if gd['a_ves_paths']:
+                # Get ain for this group
+                group_ain = gd.get('ain', None)
+                if group_ain:
+                    try:
+                        int(group_ain)
+                        ain_display = f"{group_ain} ms"
+                    except (ValueError, TypeError):
+                        ain_display = group_ain
+                else:
+                    ain_display = "00:00:00:00"
+                for i, audio_file in enumerate(gd['a_ves_paths']):
+                    lang = gd['a_langs'][i] if i < len(gd['a_langs']) else 'und'
+                    print(f"                                  PID: 4352 | Name: {os.path.basename(audio_file)} | File Path: {audio_file} | Language: {lang} | IN TimeCode: {ain_display} | Default Track: True")
+            else:
+                print("                                  N/A")
     print("Subtitle Info:")
-    for idx, (s_path, lang, sin_timecode) in enumerate(subtitles_lang_pairs):
+    for idx, (s_path, lang, sin_timecode, sin_value) in enumerate(subtitles_lang_pairs):
         start_pid = int('4608')
         pid = start_pid + idx
 
@@ -1305,28 +1516,61 @@ if __name__ == "__main__":
         if not result_sin:
             print("Error: No Result")
             sys.exit(1)
- 
-        pg_value = result_sin["value"]
-        pgtc = result_sin["sin"]
 
-        print(f"              PID: {pid} | Name: {os.path.basename(s_path)} | Codec: PGS | File Path: {s_path} | Language: {lang} | IN TimeCode: {pgtc} | Default Track: {is_default}\n")
-      
+        pg_value = result_sin["value"]
+        pgtc_raw = result_sin["sin"]
+
+        try:
+            int(pgtc_raw)
+            pgtc = f"{pgtc_raw} ms"
+        except (ValueError, TypeError):
+            pgtc = pgtc_raw
+
+        try:
+            int(sin_value)
+            sin_display = f"{sin_value} ms"
+        except (ValueError, TypeError):
+            sin_display = sin_timecode
+
+        print(f"              PID: {pid} | Name: {os.path.basename(s_path)} | Codec: PGS | File Path: {s_path} | Language: {lang} | IN TimeCode: {sin_display} | Default Track: {is_default}\n")
+
         pg_all_value_list.append((pid, s_path, lang, sin_timecode, pg_value))
+    if not subtitles_lang_pairs:
+        print("              N/A\n")
 
     if all_group_results:
         for gi, gd in enumerate(all_group_results, start=1):
             print(f"              Append Track {gi}:")
-            for i, sub_file in enumerate(gd['s_pes_paths']):
-                lang = gd['s_langs'][i] if i < len(gd['s_langs']) else 'und'
-                pg_entry = gd['pg_all_value_list'][i] if i < len(gd['pg_all_value_list']) else None
-                sin_tc_display = pg_entry[3] if pg_entry else '00:00:00:00'
-                print(f"                             PID: 4608 | Name: {os.path.basename(sub_file)} | Codec: PGS | File Path: {sub_file} | Language: {lang} | IN TimeCode: {sin_tc_display} | Default Track: True")
+            if gd['s_pes_paths']:
+                for i, sub_file in enumerate(gd['s_pes_paths']):
+                    lang = gd['s_langs'][i] if i < len(gd['s_langs']) else 'und'
+                    pg_entry = gd['pg_all_value_list'][i] if i < len(gd['pg_all_value_list']) else None
+                    sin_tc_display = pg_entry[3] if pg_entry else '00:00:00:00'
+                    sin_value_display = pg_entry[5] if pg_entry else 0
+                    try:
+                        int(sin_value_display)
+                        sin_display = f"{sin_value_display} ms"
+                    except (ValueError, TypeError):
+                        sin_display = sin_tc_display
+                    print(f"                             PID: 4608 | Name: {os.path.basename(sub_file)} | Codec: PGS | File Path: {sub_file} | Language: {lang} | IN TimeCode: {sin_display} | Default Track: True")
+            else:
+                print("                             N/A")
 
     out_tc_dv = value_mhz(tc_start_timecode, timecode_dv, None, args.fdv)
 
+    # -outtime: also override DV out time when a DV layer is present
+    if args.outtime and args.fdv and out_tc_dv is not None:
+        _dv_tc_start = tc_start_timecode_dv if tc_start_timecode_dv else tc_start_timecode
+        _stdout = sys.stdout
+        sys.stdout = io.StringIO()
+        _out_tc_dv_override = value_mhz(_dv_tc_start, args.outtime, None, args.fdv)
+        sys.stdout = _stdout
+        if _out_tc_dv_override is not None:
+            out_tc_dv = _out_tc_dv_override
+
     if args.t:
 
-        chapters = chapter(tc_start_timecode, args.t, args.f, args.fdv, args.a, args.a, args.s)
+        chapters = chapter(tc_start_timecode, args.t, args.f, args.fdv, args.a or [], args.a or [], args.s or [])
 
     else:
 
@@ -1335,14 +1579,14 @@ if __name__ == "__main__":
         print(f"                  00:00:00:00\n")
 
     if not chapters:
-        print("Error: No chapters timecode")
+        print("Error: No Chapters Timecode")
         sys.exit(1)
 
     if in_tc and out_tc:
         timestamps = [in_tc]
 
         # Call maked_clip separately to get tuple return value
-        clip, clpi_append_blocks = maked_clip(fu, in_tc, out_tc, timestamps, v_ves_path=args.f, dv_ves_path=args.fdv, sct=sct_value, vfv=video_format_code, vfps=fps_code, a_ves_paths=args.a, a_ves_pid_list=a_ves_pid_list, pg_all_value_list=pg_all_value_list, aci_list=aci_list, apt_list=apt_list, sf_list=sf_list, adps_list=adps_list, ca_list=ca_list, bps_list=bps_list, v_idc=API_value, lidc=li_value, frame_mbs_only_flag=fmof_value, long_GOP=lg_value, ast_value_list=ast_value_list, src_value_list=src_value_list, bsid_value_list=bsid_value_list, brc_value_list=brc_value_list, dsurmod_value_list=dsurmod_value_list, bsmod_value_list=bsmod_value_list, nc_value_list=nc_value_list, full_svc_value_list=full_svc_value_list, langcod_value_list=langcod_value_list, langcod2_value_list=langcod2_value_list, mainid_value_list=mainid_value_list, asvcflags_value_list=asvcflags_value_list, tcflag_value_list=tcflag_value_list, mlp_sampling_rate_value_list=mlp_sampling_rate_value_list, dts_stream_type_value_list=dts_stream_type_value_list, cri_present_flag=HEVC_cri_present_flag, dynamic_range_type=dynamic_range_type, colour_primaries=colour_primaries, HDR10plus_present_flag=HDR10plus_present_flag, sct_dv_value=sct_dv_value, video_dv_format_code=video_dv_format_code, fps_code_0_dv=fps_code_0_dv, cpf_value_mode_dv=cpf_value_mode_dv, color_space_dv=color_space_dv, dynamic_range_type_dv=dynamic_range_type_dv, hdr10pf_value_mode_dv=hdr10pf_value_mode_dv, s_pes_paths=args.s, nosip=count, all_group_results=all_group_results, mp=args.mux)
+        clip, clpi_append_blocks = maked_clip(fu, in_tc, out_tc, timestamps, v_ves_path=args.f, dv_ves_path=args.fdv, sct=sct_value, vfv=video_format_code, vfps=fps_code, a_ves_paths=args.a, a_ves_pid_list=a_ves_pid_list, pg_all_value_list=pg_all_value_list, aci_list=aci_list, apt_list=apt_list, sf_list=sf_list, adps_list=adps_list, ca_list=ca_list, bps_list=bps_list, v_idc=API_value, lidc=li_value, frame_mbs_only_flag=fmof_value, long_GOP=lg_value, ast_value_list=ast_value_list, src_value_list=src_value_list, bsid_value_list=bsid_value_list, brc_value_list=brc_value_list, dsurmod_value_list=dsurmod_value_list, bsmod_value_list=bsmod_value_list, nc_value_list=nc_value_list, full_svc_value_list=full_svc_value_list, langcod_value_list=langcod_value_list, langcod2_value_list=langcod2_value_list, mainid_value_list=mainid_value_list, asvcflags_value_list=asvcflags_value_list, tcflag_value_list=tcflag_value_list, mlp_sampling_rate_value_list=mlp_sampling_rate_value_list, dts_stream_type_value_list=dts_stream_type_value_list, cri_present_flag=HEVC_cri_present_flag, dynamic_range_type=dynamic_range_type, colour_primaries=colour_primaries, HDR10plus_present_flag=HDR10plus_present_flag, sct_dv_value=sct_dv_value, video_dv_format_code=video_dv_format_code, fps_code_0_dv=fps_code_0_dv, cpf_value_mode_dv=cpf_value_mode_dv, color_space_dv=color_space_dv, dynamic_range_type_dv=dynamic_range_type_dv, hdr10pf_value_mode_dv=hdr10pf_value_mode_dv, s_pes_paths=args.s, nosip=count, all_group_results=all_group_results, mp=args.mux, ain_value=ain_value)
 
         playlist, fsdescriptor, indextable, movieobject, projectdefinition = maked_playlist(in_tc, out_tc, out_tc_dv, chapters, timestamps, sct=sct_value, vfv=video_format_code, vfps=fps_code, a_ves_pid_list=a_ves_pid_list, pg_all_value_list=pg_all_value_list, video=args.f, a_ves_paths=args.a, s_pes_paths=args.s, aci_list=aci_list, apt_list=apt_list, sf_list=sf_list, f_count=f_count, fdv_count=fdv_count, a_count=a_count, s_count=s_count, dp_x0_value=dp_x0_value, dp_y0_value=dp_y0_value, dp_x1_value=dp_x1_value, dp_y1_value=dp_y1_value, dp_x2_value=dp_x2_value, dp_y2_value=dp_y2_value, wp_x_value=wp_x_value, wp_y_value=wp_y_value, max_dml_value=max_dml_value, min_dml_value=min_dml_value, maxCLL_value=maxCLL_value, maxFALL_value=maxFALL_value, dynamic_range_type=dynamic_range_type, sct_dv_value=sct_dv_value, video_dv_format_code=video_dv_format_code, fps_code_0_dv=fps_code_0_dv, dm_value=dm_value, cpf_value_mode_dv=cpf_value_mode_dv, color_space_dv=color_space_dv, dynamic_range_type_dv=dynamic_range_type_dv, hdr10pf_value_mode_dv=hdr10pf_value_mode_dv, all_group_results=all_group_results), maked_fsdescriptor(fu, mp=args.mux, all_group_results=all_group_results), maked_indextable(), maked_movieobject(id_1, id_2), maked_projectdefinition(hypermux_final, fu, mp=args.mux, all_group_results=all_group_results)
 

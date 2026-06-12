@@ -5,6 +5,7 @@ import os
 import sys
 import struct
 import statistics
+from pgtc_ms_ues import pg, mstovalue
 from pathlib import Path
 from typing import List, Optional
 from fractions import Fraction
@@ -81,11 +82,12 @@ class TSContext:
         return (self.carry * (1 << 33)) + dts, (self.carry * (1 << 33)) + pts
 
 class MuiDecoder:
-    def __init__(self, mui_file: str, pes_file: str, fps: float, drop_frame: bool = False):
+    def __init__(self, mui_file: str, pes_file: str, fps: float, drop_frame: bool = False, tc_start_timecode=None):
         self.mui_file = Path(mui_file)
         self.pes_file = Path(pes_file)
         self.fps = float(fps)
         self.drop_frame = drop_frame
+        self.tc_start_timecode = tc_start_timecode
 
         code = self.read_pes_code()
         self.code = code 
@@ -115,7 +117,7 @@ class MuiDecoder:
         frac = FRAME_RATES.get(code)
         return frac
 
-    def get_first_time(self, smpte: bool = True) -> str:
+    def get_first_time(self, smpte: bool = True) -> tuple:
         with open(self.mui_file, "rb") as f:
             f.read(4)
 
@@ -132,15 +134,18 @@ class MuiDecoder:
 
             pts = num - TSOFFSET_MUIES
             ms = ticks_to_ms(pts)
+            value = mstovalue(ms, self.tc_start_timecode)
 
             if smpte:
-                return ms_to_smpte(ms, self.fps, self.drop_frame)
+                tc_str = ms_to_smpte(ms, self.fps, self.drop_frame)
             else:
                 h, r = divmod(ms, 3600_000)
                 m, r = divmod(r, 60_000)
                 s, ms = divmod(r, 1000)
-                return f"{h:02}:{m:02}:{s:02},{ms:03}"
+                tc_str = f"{h:02}:{m:02}:{s:02},{ms:03}"
 
-def sin(mui_path: str, pes_path: str, fps: float, drop_frame: bool = False) -> str:
-    return_tc = MuiDecoder(mui_path, pes_path, fps=float(fps), drop_frame=drop_frame)
+            return tc_str, ms
+
+def sin(mui_path: str, pes_path: str, fps: float, drop_frame: bool = False, tc_start_timecode=None) -> tuple:
+    return_tc = MuiDecoder(mui_path, pes_path, fps=float(fps), drop_frame=drop_frame, tc_start_timecode=tc_start_timecode)
     return return_tc.get_first_time()

@@ -109,7 +109,7 @@ def correct_offset_generator_24():
                 yield current, "Odd"
                 current += 1
 
-def correct_offset_generator_TC():
+def correct_offset_generator_tc():
     current = 1
     while True:
         for _ in range(4):
@@ -161,7 +161,7 @@ def correct_offset_generator_TC():
                 yield current, "Odd"
                 current += 1
 
-def timecode_to_value_verbose_TC(timecode, fps=24, base=54000000, per_frame=3749, verbose=True):
+def timecode_to_value_verbose_tc(timecode, fps=24, base=54000000, per_frame=3749, verbose=True):
     hh, mm, ss, ff = map(int, timecode.strip().split(":"))
     total_frames = ((hh * 3600 + mm * 60 + ss) * fps + ff)
 
@@ -200,7 +200,7 @@ def timecode_to_value_verbose(timecode, tc_start="00:00:00:00", fps=24, base=540
     if fps_mode_value == '23.976':
         extra_23_98, offset_type_23_98 = offset_23_98
         if tc_start != "00:00:00:00":
-            base_TC = timecode_to_value_verbose_TC(tc_start, verbose=False)
+            base_TC = timecode_to_value_verbose_tc(tc_start, verbose=False)
             result_23_98 = base_TC + total_frames_23_98 * per_frame_23_98 + extra_23_98
             print(f"[23.976fps][TC]{timecode} = {base_TC} + {per_frame_23_98} * {total_frames_23_98} + offset{extra_23_98}（{offset_type_23_98}）= {result_23_98}")
         else:
@@ -210,7 +210,7 @@ def timecode_to_value_verbose(timecode, tc_start="00:00:00:00", fps=24, base=540
     elif fps_mode_value == '24':    
         extra_24, offset_type_24 = offset_24
         if tc_start != "00:00:00:00":
-            base_TC = timecode_to_value_verbose_TC(tc_start, verbose=False)
+            base_TC = timecode_to_value_verbose_tc(tc_start, verbose=False)
             result_24 = base_TC + total_frames_24 * per_frame_24 + extra_24
             print(f"[24fps][TC]{timecode} = {base_TC} + {per_frame_24} * {total_frames_24} + offset{extra_24}（{offset_type_24}）= {result_24}")
         else:
@@ -218,6 +218,21 @@ def timecode_to_value_verbose(timecode, tc_start="00:00:00:00", fps=24, base=540
             print(f"[24fps]{timecode} = {base} + {per_frame_24} * {total_frames_24} + offset{extra_24}（{offset_type_24}）= {result_24}")
     
     return result_23_98, result_24
+
+def mstovalue(ms, tc_start_timecode=None):
+    if ms is None or ms < 0:
+        return None
+    if ms == 0:
+        if tc_start_timecode:
+            value = timecode_to_value_verbose_tc(tc_start_timecode, verbose=False)
+        else:
+            value = 54000000
+    elif tc_start_timecode:
+        tc_result = timecode_to_value_verbose_tc(tc_start_timecode, verbose=False)
+        value = 48 + (ms - 1) * 90 + tc_result
+    else:
+        value = 54000048 + (ms - 1) * 90
+    return value
 
 def pg(sin=None, tc_start_timecode=None, file_path=None, ves_path=None):
     from mhz import parse_duration_from_ves_file, is_valid_timecode
@@ -236,6 +251,14 @@ def pg(sin=None, tc_start_timecode=None, file_path=None, ves_path=None):
             sys.exit(1)
 
         return final_value
+
+    if sin is not None:
+        try:
+            ms_value = int(sin)
+            final_value = mstovalue(ms_value, tc_start_timecode)
+            return {"sin": sin, "value": final_value}
+        except (ValueError, TypeError):
+            pass
 
     if ves_path:
         fps_mode = parse_duration_from_ves_file(ves_path)

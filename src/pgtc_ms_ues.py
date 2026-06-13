@@ -235,7 +235,7 @@ def mstovalue(ms, tc_start_timecode=None):
     return value
 
 def pg(sin=None, tc_start_timecode=None, file_path=None, ves_path=None):
-    from mhz import parse_duration_from_ves_file, is_valid_timecode
+    from mhz_ms_ues import parse_duration_from_ves_file, is_valid_timecode
 
     results_sin = []
 

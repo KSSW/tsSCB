@@ -1019,7 +1019,7 @@ if __name__ == "__main__":
 
     parser = CustomArgumentParser(
         add_help=False,
-        usage="tsSCB.exe -f <Input Video VES File> -a <Input Audio VES File> -s <Input Subtitles VES File> -sin <Set IN Time Subtitles> -mux <Output MUX Folder> | More options -h",
+        usage="tsSCB.exe -f <Input Video VES File> -mux <Output MUX Folder> | More options -h",
         epilog=""
         )
     parser.add_argument('-f', type=str, metavar='', required=True, help="Input Video VES File ( Supported videocodecs: H.264/AVC, H.265/HEVC )")
@@ -1151,7 +1151,7 @@ if __name__ == "__main__":
         pes_file_check_path(args.s)
 
     # Validate: -fdv cannot be used with -append
-    if args.fdv and append_groups and args.config:
+    if args.fdv and append_groups or args.config:
         print("Error: -fdv (Dolby Vision) cannot be used with -append")
         sys.exit(1)
 
@@ -1296,7 +1296,7 @@ if __name__ == "__main__":
         group_pg_all_value_list = []
         group_subtitle_langs = group.get('slang', [])
         group_fps_val = group_encoding_info.get('fps', fps)
-        pid = 4608
+        pid = 4768
         for i, s_path in enumerate(group_ssf_file):
             lang = group_subtitle_langs[i] if i < len(group_subtitle_langs) else 'und'
             # Try to get sin_timecode from MUI file (same as main clip logic)

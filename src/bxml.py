@@ -3,7 +3,7 @@
 import os
 from pgtc_ms_ues import pg
 
-def maked_playlist(in_time, out_time, out_tc_dv, value_chap, timestamps, sct, vfv, vfps, a_ves_pid_list, pg_all_value_list, video, a_ves_paths, s_pes_paths, aci_list, apt_list, sf_list, f_count, fdv_count, a_count, s_count, dp_x0_value, dp_y0_value, dp_x1_value, dp_y1_value, dp_x2_value, dp_y2_value, wp_x_value, wp_y_value, max_dml_value, min_dml_value, maxCLL_value, maxFALL_value, dynamic_range_type, sct_dv_value, video_dv_format_code, fps_code_0_dv, dm_value, cpf_value_mode_dv, color_space_dv, dynamic_range_type_dv, hdr10pf_value_mode_dv, all_group_results=None):
+def maked_playlist(in_time, out_time, out_tc_dv, value_chap, timestamps, sct, vfv, vfps, a_ves_pid_list, pg_all_value_list, video, a_ves_paths, s_pes_paths, aci_list, apt_list, sf_list, f_count, fdv_count, a_count, s_count, dp_x0_value, dp_y0_value, dp_x1_value, dp_y1_value, dp_x2_value, dp_y2_value, wp_x_value, wp_y_value, max_dml_value, min_dml_value, maxCLL_value, maxFALL_value, dynamic_range_type, colour_primaries, HEVC_cri_present_flag, HDR10plus_present_flag, sct_dv_value, video_dv_format_code, fps_code_0_dv, dm_value, cpf_value_mode_dv, color_space_dv, dynamic_range_type_dv, hdr10pf_value_mode_dv, all_group_results=None):
     # Guard against None for optional tracks
     if a_ves_pid_list is None:
         a_ves_pid_list = []
@@ -19,7 +19,8 @@ def maked_playlist(in_time, out_time, out_tc_dv, value_chap, timestamps, sct, vf
         apt_list = []
     if sf_list is None:
         sf_list = []
-    if video:
+        
+    if sct == '1B':
         primary_video_stream = f"""
               <primary_video_stream>
                 <stream_entry>
@@ -42,52 +43,80 @@ def maked_playlist(in_time, out_time, out_tc_dv, value_chap, timestamps, sct, vf
               </primary_video_stream>
             """.strip()
 
-        primary_audio_streams = []
-        nodess = []
-        nodes_not = []
-        dv_noss = []
-        dv_noss_final = []
-        dv_noss_not_values = []
-        number_of_SubPaths = []
-        nos_numbers = []
-        lp_dvs = []
-        all_info_number_of_SubPaths_final = []
-        append_play_items = []
-        
-        if sct == '24':
-                
-            nodes = (
-                f"          <static_metadata>\n"
-                f"            <number_of_data_entries>1</number_of_data_entries>\n"
-                f"            <Loop_static_metadata_entries>\n"
-                f"              <static_metadata_entry>\n"
-                f"                <dynamic_range_type_ref>{dynamic_range_type}</dynamic_range_type_ref>\n"
-                f"                <number_of_display_primaries>3</number_of_display_primaries>\n"
-                f"                <Loop_display_primaries>\n"
-                f"                  <display_primaries>\n"
-                f"                    <display_primaries_x>{dp_x0_value}</display_primaries_x>\n"
-                f"                    <display_primaries_y>{dp_y0_value}</display_primaries_y>\n"
-                f"                  </display_primaries>\n"
-                f"                  <display_primaries>\n"
-                f"                    <display_primaries_x>{dp_x1_value}</display_primaries_x>\n"
-                f"                    <display_primaries_y>{dp_y1_value}</display_primaries_y>\n"
-                f"                  </display_primaries>\n"
-                f"                  <display_primaries>\n"
-                f"                    <display_primaries_x>{dp_x2_value}</display_primaries_x>\n"
-                f"                    <display_primaries_y>{dp_y2_value}</display_primaries_y>\n"
-                f"                  </display_primaries>\n"
-                f"                </Loop_display_primaries>\n"
-                f"                <white_point_x>{wp_x_value}</white_point_x>\n"
-                f"                <white_point_y>{wp_y_value}</white_point_y>\n"
-                f"                <max_display_mastering_luminance>{max_dml_value}</max_display_mastering_luminance>\n"
-                f"                <min_display_mastering_luminance>{min_dml_value}</min_display_mastering_luminance>\n"
-                f"                <MaxCLL>{maxCLL_value}</MaxCLL>\n"
-                f"                <MaxFALL>{maxFALL_value}</MaxFALL>\n"
-                f"              </static_metadata_entry>\n"
-                f"            </Loop_static_metadata_entries>\n"
-                f"          </static_metadata>"
-            )
-            nodess.append(nodes)
+    if sct == '24':
+        primary_video_stream = f"""
+              <primary_video_stream>
+                <stream_entry>
+                  <type>1</type>
+                  <Select_type>
+                    <type_1>
+                      <ref_to_stream_PID_of_mainClip>4113</ref_to_stream_PID_of_mainClip>
+                    </type_1>
+                  </Select_type>
+                </stream_entry>
+                <stream_attributes>
+                  <stream_coding_type>{sct}</stream_coding_type>
+                  <Select_stream_coding_type>
+                    <video_stream>
+                      <video_format>{vfv}</video_format>
+                      <frame_rate>{vfps}</frame_rate>
+                      <dynamic_range_type>{dynamic_range_type}</dynamic_range_type>
+                      <color_space>{colour_primaries}</color_space>
+                      <cri_usage_flag>{HEVC_cri_present_flag}</cri_usage_flag>
+                      <HDR10plus_flag>{HDR10plus_present_flag}</HDR10plus_flag>
+                    </video_stream>
+                  </Select_stream_coding_type>
+                </stream_attributes>
+              </primary_video_stream>
+            """.strip()
+
+    primary_audio_streams = []
+    nodess = []
+    nodes_not = []
+    nos_numbers_final = []
+    dv_noss = []
+    dv_noss_final = []
+    dv_noss_not_values = []
+    number_of_SubPaths = []
+    nos_numbers = []
+    lp_dvs = []
+    all_info_number_of_SubPaths_final = []
+    append_play_items = []
+
+    if sct == '24':
+
+        nodes = (
+            f"          <static_metadata>\n"
+            f"            <number_of_data_entries>1</number_of_data_entries>\n"
+            f"            <Loop_static_metadata_entries>\n"
+            f"              <static_metadata_entry>\n"
+            f"                <dynamic_range_type_ref>{dynamic_range_type}</dynamic_range_type_ref>\n"
+            f"                <number_of_display_primaries>3</number_of_display_primaries>\n"
+            f"                <Loop_display_primaries>\n"
+            f"                  <display_primaries>\n"
+            f"                    <display_primaries_x>{dp_x0_value}</display_primaries_x>\n"
+            f"                    <display_primaries_y>{dp_y0_value}</display_primaries_y>\n"
+            f"                  </display_primaries>\n"
+            f"                  <display_primaries>\n"
+            f"                    <display_primaries_x>{dp_x1_value}</display_primaries_x>\n"
+            f"                    <display_primaries_y>{dp_y1_value}</display_primaries_y>\n"
+            f"                  </display_primaries>\n"
+            f"                  <display_primaries>\n"
+            f"                    <display_primaries_x>{dp_x2_value}</display_primaries_x>\n"
+            f"                    <display_primaries_y>{dp_y2_value}</display_primaries_y>\n"
+            f"                  </display_primaries>\n"
+            f"                </Loop_display_primaries>\n"
+            f"                <white_point_x>{wp_x_value}</white_point_x>\n"
+            f"                <white_point_y>{wp_y_value}</white_point_y>\n"
+            f"                <max_display_mastering_luminance>{max_dml_value}</max_display_mastering_luminance>\n"
+            f"                <min_display_mastering_luminance>{min_dml_value}</min_display_mastering_luminance>\n"
+            f"                <MaxCLL>{maxCLL_value}</MaxCLL>\n"
+            f"                <MaxFALL>{maxFALL_value}</MaxFALL>\n"
+            f"              </static_metadata_entry>\n"
+            f"            </Loop_static_metadata_entries>\n"
+            f"          </static_metadata>"
+        )
+        nodess.append(nodes)
             
         if dm_value:
 
@@ -156,17 +185,6 @@ def maked_playlist(in_time, out_time, out_tc_dv, value_chap, timestamps, sct, vf
             )
 
             lp_dvs.append(lp_dv)
-                            
-        else:
-            
-            nodes_not = (
-                f"          <static_metadata>\n"
-                f"            <number_of_data_entries>0</number_of_data_entries>\n"
-                f"            <Loop_static_metadata_entries />\n"
-                f"          </static_metadata>"
-            )
-
-            nodess.append(nodes_not)
 
             number_of_SubPaths = (
                 f'      <number_of_SubPaths>0</number_of_SubPaths>'
@@ -195,6 +213,9 @@ def maked_playlist(in_time, out_time, out_tc_dv, value_chap, timestamps, sct, vf
 
     if all_info_number_of_SubPaths_final:
       all_info_number_of_SubPaths_final = "\n" + all_info_number_of_SubPaths_final
+
+    if not dv_noss_final:
+      dv_noss_final = "            <Loop_enhancement_layer_video_stream />"
 
     for idx, (pid, a_path, lang), in enumerate(a_ves_pid_list):
         aci_code = aci_list[idx]
@@ -232,7 +253,6 @@ def maked_playlist(in_time, out_time, out_tc_dv, value_chap, timestamps, sct, vf
 
         if s_pes_paths:
             subtitles = (
-                f"            <Loop_PG_textST_stream>\n"
                 f"              <PG_textST_stream>\n"
                 f"                <stream_entry>\n"
                 f"                  <type>1</type>\n"
@@ -250,13 +270,15 @@ def maked_playlist(in_time, out_time, out_tc_dv, value_chap, timestamps, sct, vf
                 f"                    </PG_stream>\n"
                 f"                  </Select_stream_coding_type>\n"
                 f"                </stream_attributes>\n"
-                f"              </PG_textST_stream>\n"
-                f"            </Loop_PG_textST_stream>"
+                f"              </PG_textST_stream>"
             )
             final_stream.append(subtitles)
 
     all_audio_streams_final = "\n".join(primary_audio_streams)
     all_sub_streams_final = "\n".join(final_stream)
+
+    if not nos_numbers_final:
+      nos_numbers_final = "      <number_of_SubPaths>0</number_of_SubPaths>"
 
     if not all_audio_streams_final:
       all_audio_streams_final = f"            <Loop_primary_audio_stream />"
@@ -264,11 +286,21 @@ def maked_playlist(in_time, out_time, out_tc_dv, value_chap, timestamps, sct, vf
     if not all_sub_streams_final:
       all_sub_streams_final = f"            <Loop_PG_textST_stream />"
 
-    if not append_play_items:
-      append_play_items = f"        </PlayItem>"
+    if not sct == '24':
+      nodess_final = (
+        f"          <static_metadata>\n"
+        f"            <number_of_data_entries>0</number_of_data_entries>\n"
+        f"            <Loop_static_metadata_entries />\n"
+        f"          </static_metadata>"
+      )
 
     if not all_info_number_of_SubPaths_final:
-      all_info_number_of_SubPaths_final = f"        </PlayItem>"
+      all_info_number_of_SubPaths_final = (
+        f"\n"
+        f"      </Loop_PlayItem>\n"
+        f"      <Loop_SubPath />"
+      )
+
 
     # Build append PlayItems block BEFORE the f-string template (backslash not allowed inside f-string)
     _nl = "\n"
@@ -327,25 +359,7 @@ def maked_playlist(in_time, out_time, out_tc_dv, value_chap, timestamps, sct, vf
             <number_of_PiP_PG_textST_stream_entries_plus>0</number_of_PiP_PG_textST_stream_entries_plus>
             <number_of_enhancement_layer_video_stream_entries>0</number_of_enhancement_layer_video_stream_entries>
             <Loop_primary_video_stream>
-              <primary_video_stream>
-                <stream_entry>
-                  <type>1</type>
-                  <Select_type>
-                    <type_1>
-                      <ref_to_stream_PID_of_mainClip>4113</ref_to_stream_PID_of_mainClip>
-                    </type_1>
-                  </Select_type>
-                </stream_entry>
-                <stream_attributes>
-                  <stream_coding_type>{sct}</stream_coding_type>
-                  <Select_stream_coding_type>
-                    <video_stream>
-                      <video_format>{vfv}</video_format>
-                      <frame_rate>{vfps}</frame_rate>
-                    </video_stream>
-                  </Select_stream_coding_type>
-                </stream_attributes>
-              </primary_video_stream>
+              {primary_video_stream}
             </Loop_primary_video_stream>
             <Loop_primary_audio_stream>
 {all_audio_streams_final}
@@ -484,7 +498,9 @@ def maked_playlist(in_time, out_time, out_tc_dv, value_chap, timestamps, sct, vf
             <Loop_primary_audio_stream>
 {all_audio_streams_final}
             </Loop_primary_audio_stream>
+            <Loop_PG_textST_stream>
 {all_sub_streams_final}
+            </Loop_PG_textST_stream>
             <Loop_IG_stream />
             <Loop_secondary_audio_stream />
             <Loop_secondary_video_stream />
@@ -671,7 +687,7 @@ def maked_clip(fu, in_time, out_time, timestamps, v_ves_path, dv_ves_path, sct, 
                 f"                <VES_InputFilename>{v_ves_path}</VES_InputFilename>\n"
                 f"                <MUI_InputFilename>{v_mui_path}</MUI_InputFilename>\n"
                 f"                <ESData_RwBufferSize>10240</ESData_RwBufferSize>\n"
-              f"              </ESData_TS>\n"
+              f"              </ESData_TS>"
          )
 
 
@@ -711,7 +727,7 @@ def maked_clip(fu, in_time, out_time, timestamps, v_ves_path, dv_ves_path, sct, 
         syyqs.append(syyq)
               
         f_dv_value = "\n".join(syyqs)
-        dv_ves_block = f"\n{f_dv_value}" if f_dv_value else ""
+        dv_ves_block = f"{f_dv_value}" if f_dv_value else ""
 
 
         sip_dv = f"""            <streams_in_ps>
@@ -743,7 +759,7 @@ def maked_clip(fu, in_time, out_time, timestamps, v_ves_path, dv_ves_path, sct, 
               </StreamCodingInfo>
             </streams_in_ps>"""
 
-        dv_ves_all_info = f"\n{sip_dv}" if sip_dv else ""
+        dv_ves_all_info = f"{sip_dv}" if sip_dv else ""
     
     audio_stream = ""
     blocks = []
@@ -1066,11 +1082,11 @@ def maked_clip(fu, in_time, out_time, timestamps, v_ves_path, dv_ves_path, sct, 
                 audio_pid_es += 1
             
             # Generate subtitle PIDs for this group (starting from 4608)
-            sub_pid = 4608
+            sub_pid = 4768
             for sub_file in group_s:
                 # Get pg_value from pg_all_value_list
-                pg_value = "54000000"
-                for (s_pid, s_path, lang, sin_timecode, pg_val) in group_pg_all_value_list:
+                pg_value = ""
+                for (s_pid, s_path, lang, sin_timecode, pg_val, sin_value) in group_pg_all_value_list:
                     if s_path == sub_file:
                         pg_value = pg_val
                         break
@@ -1227,7 +1243,7 @@ def maked_clip(fu, in_time, out_time, timestamps, v_ves_path, dv_ves_path, sct, 
                 audio_pid += 1
             
             # Subtitle stream coding info
-            sub_pid = 4608
+            sub_pid = 4768
             for i, sub_file in enumerate(group_s):
                 sub_lang = group_slang[i] if i < len(group_slang) else 'und'
                 stream_coding_blocks.append(f'''            <streams_in_ps>
@@ -1346,6 +1362,9 @@ def maked_clip(fu, in_time, out_time, timestamps, v_ves_path, dv_ves_path, sct, 
     stream_parts = [sip_v, audio_stream, all_streams_in_ps, dv_ves_all_info]
     stream_parts = [p.rstrip() for p in stream_parts if p and p.strip()]
     stream_content = "\n".join(stream_parts)
+    ssv = [syys, apid, dv_ves_block]
+    ssv = [p.rstrip() for p in ssv if p and p.strip()]
+    ssv_c = "\n".join(ssv)
     
     xml_template = f"""
 <?xml version="1.0" encoding="UTF-8"?>
@@ -1376,7 +1395,7 @@ def maked_clip(fu, in_time, out_time, timestamps, v_ves_path, dv_ves_path, sct, 
             <STC_sequence>
               <presentation_start_time>{in_time}</presentation_start_time>
               <presentation_end_time>{out_time}</presentation_end_time>
-              {syys}{apid}{dv_ves_block}
+              {ssv_c}
             </STC_sequence>
           </Loop_STC_sequence>
         </ATC_sequence>
@@ -1896,7 +1915,24 @@ def maked_fsdescriptor(fu, mp, all_group_results=None):
 
     return xml_template.strip()
 
-def maked_indextable():
+def maked_indextable(sct, colour_primaries, HDR10plus_present_flag, color_space_dv):
+
+    if sct == "24":
+      i4ce = "true"
+    else:
+      i4ce = "false"
+    
+    if HDR10plus_present_flag == "true" and color_space_dv:
+      hcef = "22"
+    elif HDR10plus_present_flag == "true":
+      hcef = "18"
+    elif colour_primaries and color_space_dv:
+      hcef = "6"
+    elif colour_primaries:
+      hcef = "2"
+    else:
+      hcef = "0"
+
     xml_template = f"""
 <?xml version="1.0" encoding="UTF-8"?>
 <IndexTableFile Version="0099" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="IndexTable.xsd">
@@ -1908,7 +1944,7 @@ def maked_indextable():
     <initial_dynamic_range_type>0</initial_dynamic_range_type>
     <video_format>0</video_format>
     <frame_rate>0</frame_rate>
-    <content_provider_user_data>Not</content_provider_user_data>
+    <content_provider_user_data />
   </AppInfoBDMV>
   <Loop_padding_word_1 />
   <Indexes>
@@ -1958,8 +1994,8 @@ def maked_indextable():
       <data_block>
         <Disc_Info>
           <disc_type>5</disc_type>
-          <is_4K_content_exist>false</is_4K_content_exist>
-          <HDR_content_exist_flags>0</HDR_content_exist_flags>
+          <is_4K_content_exist>{i4ce}</is_4K_content_exist>
+          <HDR_content_exist_flags>{hcef}</HDR_content_exist_flags>
         </Disc_Info>
       </data_block>
     </Loop_data_block>

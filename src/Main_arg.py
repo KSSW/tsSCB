@@ -29,6 +29,50 @@ from datetime import datetime
 from ecq import aut
 from times import args_parser
 from readpes import sin
+def validate_timecode_fps(timecode_str, fps, arg_name):
+    if not timecode_str:
+        return
+    
+    # Check if it's a millisecond value (numeric)
+    try:
+        int(timecode_str)
+        return  # Milliseconds are valid
+    except ValueError:
+        pass
+    
+    # Parse timecode format HH:MM:SS:FF
+    parts = timecode_str.split(':')
+    if len(parts) != 4:
+        print(f"Error: {arg_name} must be in timecode format HH:MM:SS:FF or milliseconds")
+    
+    try:
+        frame = int(parts[3])
+    except ValueError:
+        print(f"Error: Invalid frame number in {arg_name}: {parts[3]}")
+    
+    # Determine max frame based on FPS
+    if fps == '23.976':
+        max_frame = 23
+    elif fps == '24':
+        max_frame = 23
+    elif fps == '25':
+        max_frame = 24
+    elif fps == '29.97':
+        max_frame = 29
+    elif fps == '30':
+        max_frame = 29
+    elif fps == '50':
+        max_frame = 49
+    elif fps == '59.94':
+        max_frame = 59
+    elif fps == '60':
+        max_frame = 59
+    else:
+        # Default to 23 for unknown FPS (conservative)
+        max_frame = 23
+    
+    if frame > max_frame:
+        raise ValueError(f"Error: {arg_name} frame number {frame} exceeds maximum {max_frame} for FPS {fps}")
 from mhz_ms_ues import args_parser_value
 from bxml import maked_clip, maked_playlist, maked_fsdescriptor, maked_indextable, maked_movieobject, maked_projectdefinition
 from pgtc_ms_ues import pg
@@ -112,7 +156,7 @@ def parse_duration_from_ves_file(file_path, ves_file, dv_ves_file, avf_file, avf
                     fps_value = first_line.split(',')[0]
 
         except FileNotFoundError:
-               print("Error: -t CSV File not found! Please check VES file path.")
+               print(f"Error: -t CSV File not found! Please check {args.t} file.")
                sys.exit(1)
 
     try:
@@ -1106,6 +1150,11 @@ if __name__ == "__main__":
     if args.s:
         pes_file_check_path(args.s)
 
+    # Validate: -fdv cannot be used with -append
+    if args.fdv and append_groups and args.config:
+        print("Error: -fdv (Dolby Vision) cannot be used with -append")
+        sys.exit(1)
+
     # Calculate count for main group only (since append groups were removed from sys.argv)
     count = 0
     for flag in ['-f', '-fdv', '-a', '-s']:
@@ -1134,6 +1183,20 @@ if __name__ == "__main__":
     timecode = result.get("timecode", "")
     fps = result.get("fps", "")
     fps_code = result.get("fps_code", "")
+
+    # Validate timecode arguments against FPS
+    if args.intime:
+        validate_timecode_fps(args.intime, fps, "-intime")
+    if args.outtime:
+        validate_timecode_fps(args.outtime, fps, "-outtime")
+    if args.ain:
+        validate_timecode_fps(args.ain, fps, "-ain")
+    if args.sin:
+        if isinstance(args.sin, list):
+            for sin_val in args.sin:
+                validate_timecode_fps(sin_val, fps, "-sin")
+        else:
+            validate_timecode_fps(args.sin, fps, "-sin")
 
     if args.off == 'tc':
         tc_start_timecode = "00:00:00:00"
@@ -1500,7 +1563,7 @@ if __name__ == "__main__":
                 print("                                  N/A")
     print("Subtitle Info:")
     for idx, (s_path, lang, sin_timecode, sin_value) in enumerate(subtitles_lang_pairs):
-        start_pid = int('4608')
+        start_pid = int('4768')
         pid = start_pid + idx
 
         is_default = (idx == sub_idx)
@@ -1552,7 +1615,7 @@ if __name__ == "__main__":
                         sin_display = f"{sin_value_display} ms"
                     except (ValueError, TypeError):
                         sin_display = sin_tc_display
-                    print(f"                             PID: 4608 | Name: {os.path.basename(sub_file)} | Codec: PGS | File Path: {sub_file} | Language: {lang} | IN TimeCode: {sin_display} | Default Track: True")
+                    print(f"                             PID: 4768 | Name: {os.path.basename(sub_file)} | Codec: PGS | File Path: {sub_file} | Language: {lang} | IN TimeCode: {sin_display} | Default Track: True")
             else:
                 print("                             N/A")
 
@@ -1588,7 +1651,7 @@ if __name__ == "__main__":
         # Call maked_clip separately to get tuple return value
         clip, clpi_append_blocks = maked_clip(fu, in_tc, out_tc, timestamps, v_ves_path=args.f, dv_ves_path=args.fdv, sct=sct_value, vfv=video_format_code, vfps=fps_code, a_ves_paths=args.a, a_ves_pid_list=a_ves_pid_list, pg_all_value_list=pg_all_value_list, aci_list=aci_list, apt_list=apt_list, sf_list=sf_list, adps_list=adps_list, ca_list=ca_list, bps_list=bps_list, v_idc=API_value, lidc=li_value, frame_mbs_only_flag=fmof_value, long_GOP=lg_value, ast_value_list=ast_value_list, src_value_list=src_value_list, bsid_value_list=bsid_value_list, brc_value_list=brc_value_list, dsurmod_value_list=dsurmod_value_list, bsmod_value_list=bsmod_value_list, nc_value_list=nc_value_list, full_svc_value_list=full_svc_value_list, langcod_value_list=langcod_value_list, langcod2_value_list=langcod2_value_list, mainid_value_list=mainid_value_list, asvcflags_value_list=asvcflags_value_list, tcflag_value_list=tcflag_value_list, mlp_sampling_rate_value_list=mlp_sampling_rate_value_list, dts_stream_type_value_list=dts_stream_type_value_list, cri_present_flag=HEVC_cri_present_flag, dynamic_range_type=dynamic_range_type, colour_primaries=colour_primaries, HDR10plus_present_flag=HDR10plus_present_flag, sct_dv_value=sct_dv_value, video_dv_format_code=video_dv_format_code, fps_code_0_dv=fps_code_0_dv, cpf_value_mode_dv=cpf_value_mode_dv, color_space_dv=color_space_dv, dynamic_range_type_dv=dynamic_range_type_dv, hdr10pf_value_mode_dv=hdr10pf_value_mode_dv, s_pes_paths=args.s, nosip=count, all_group_results=all_group_results, mp=args.mux, ain_value=ain_value)
 
-        playlist, fsdescriptor, indextable, movieobject, projectdefinition = maked_playlist(in_tc, out_tc, out_tc_dv, chapters, timestamps, sct=sct_value, vfv=video_format_code, vfps=fps_code, a_ves_pid_list=a_ves_pid_list, pg_all_value_list=pg_all_value_list, video=args.f, a_ves_paths=args.a, s_pes_paths=args.s, aci_list=aci_list, apt_list=apt_list, sf_list=sf_list, f_count=f_count, fdv_count=fdv_count, a_count=a_count, s_count=s_count, dp_x0_value=dp_x0_value, dp_y0_value=dp_y0_value, dp_x1_value=dp_x1_value, dp_y1_value=dp_y1_value, dp_x2_value=dp_x2_value, dp_y2_value=dp_y2_value, wp_x_value=wp_x_value, wp_y_value=wp_y_value, max_dml_value=max_dml_value, min_dml_value=min_dml_value, maxCLL_value=maxCLL_value, maxFALL_value=maxFALL_value, dynamic_range_type=dynamic_range_type, sct_dv_value=sct_dv_value, video_dv_format_code=video_dv_format_code, fps_code_0_dv=fps_code_0_dv, dm_value=dm_value, cpf_value_mode_dv=cpf_value_mode_dv, color_space_dv=color_space_dv, dynamic_range_type_dv=dynamic_range_type_dv, hdr10pf_value_mode_dv=hdr10pf_value_mode_dv, all_group_results=all_group_results), maked_fsdescriptor(fu, mp=args.mux, all_group_results=all_group_results), maked_indextable(), maked_movieobject(id_1, id_2), maked_projectdefinition(hypermux_final, fu, mp=args.mux, all_group_results=all_group_results)
+        playlist, fsdescriptor, indextable, movieobject, projectdefinition = maked_playlist(in_tc, out_tc, out_tc_dv, chapters, timestamps, sct=sct_value, vfv=video_format_code, vfps=fps_code, a_ves_pid_list=a_ves_pid_list, pg_all_value_list=pg_all_value_list, video=args.f, a_ves_paths=args.a, s_pes_paths=args.s, aci_list=aci_list, apt_list=apt_list, sf_list=sf_list, f_count=f_count, fdv_count=fdv_count, a_count=a_count, s_count=s_count, dp_x0_value=dp_x0_value, dp_y0_value=dp_y0_value, dp_x1_value=dp_x1_value, dp_y1_value=dp_y1_value, dp_x2_value=dp_x2_value, dp_y2_value=dp_y2_value, wp_x_value=wp_x_value, wp_y_value=wp_y_value, max_dml_value=max_dml_value, min_dml_value=min_dml_value, maxCLL_value=maxCLL_value, maxFALL_value=maxFALL_value, dynamic_range_type=dynamic_range_type, colour_primaries=colour_primaries, HEVC_cri_present_flag=HEVC_cri_present_flag, HDR10plus_present_flag=HDR10plus_present_flag, sct_dv_value=sct_dv_value, video_dv_format_code=video_dv_format_code, fps_code_0_dv=fps_code_0_dv, dm_value=dm_value, cpf_value_mode_dv=cpf_value_mode_dv, color_space_dv=color_space_dv, dynamic_range_type_dv=dynamic_range_type_dv, hdr10pf_value_mode_dv=hdr10pf_value_mode_dv, all_group_results=all_group_results), maked_fsdescriptor(fu, mp=args.mux, all_group_results=all_group_results), maked_indextable(sct=sct_value, colour_primaries=colour_primaries, HDR10plus_present_flag=HDR10plus_present_flag, color_space_dv=color_space_dv), maked_movieobject(id_1, id_2), maked_projectdefinition(hypermux_final, fu, mp=args.mux, all_group_results=all_group_results)
 
         xml_dir = os.path.join(args.mux, "Output", "MUX", "BDROM")
 

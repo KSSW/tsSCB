@@ -186,25 +186,18 @@ def maked_playlist(in_time, out_time, out_tc_dv, value_chap, timestamps, sct, vf
 
             lp_dvs.append(lp_dv)
 
-            number_of_SubPaths = (
-                f'      <number_of_SubPaths>0</number_of_SubPaths>'
+            if not dm_value:
+                dv_noss_not_value = (
+                    f'            <Loop_enhancement_layer_video_stream />'
+                )
+                dv_noss.append(dv_noss_not_value)
 
-            )
+                number_of_SubPaths_not = (
+                        f'      </Loop_PlayItem>\n'
+                        f'      <Loop_SubPath />'
+                )
 
-            nos_numbers.append(number_of_SubPaths)
-
-            dv_noss_not_value = (
-                f'            <Loop_enhancement_layer_video_stream />'
-            )
-
-            dv_noss.append(dv_noss_not_value)
-
-            number_of_SubPaths_not = (
-                    f'      </Loop_PlayItem>\n'
-                    f'      <Loop_SubPath />'
-            )
-
-            lp_dvs.append(number_of_SubPaths_not)
+                lp_dvs.append(number_of_SubPaths_not)
 
     nodess_final = "\n".join(nodess)
     dv_noss_final = "\n".join(dv_noss)
@@ -280,10 +273,14 @@ def maked_playlist(in_time, out_time, out_tc_dv, value_chap, timestamps, sct, vf
     if not nos_numbers_final:
       nos_numbers_final = "      <number_of_SubPaths>0</number_of_SubPaths>"
 
-    if not all_audio_streams_final:
+    if a_ves_paths:
+      all_audio_streams_final = f"            <Loop_primary_audio_stream>\n{all_audio_streams_final}\n            </Loop_primary_audio_stream>"
+    else:
       all_audio_streams_final = f"            <Loop_primary_audio_stream />"
 
-    if not all_sub_streams_final:
+    if s_pes_paths:
+      all_sub_streams_final = f"            <Loop_PG_textST_stream>\n{all_sub_streams_final}\n            </Loop_PG_textST_stream>"
+    else:
       all_sub_streams_final = f"            <Loop_PG_textST_stream />"
 
     if not sct == '24':
@@ -361,9 +358,7 @@ def maked_playlist(in_time, out_time, out_tc_dv, value_chap, timestamps, sct, vf
             <Loop_primary_video_stream>
               {primary_video_stream}
             </Loop_primary_video_stream>
-            <Loop_primary_audio_stream>
 {all_audio_streams_final}
-            </Loop_primary_audio_stream>
 {all_sub_streams_final}
             <Loop_IG_stream />
             <Loop_secondary_audio_stream />
@@ -495,12 +490,8 @@ def maked_playlist(in_time, out_time, out_tc_dv, value_chap, timestamps, sct, vf
             <Loop_primary_video_stream>
               {primary_video_stream}
             </Loop_primary_video_stream>
-            <Loop_primary_audio_stream>
 {all_audio_streams_final}
-            </Loop_primary_audio_stream>
-            <Loop_PG_textST_stream>
 {all_sub_streams_final}
-            </Loop_PG_textST_stream>
             <Loop_IG_stream />
             <Loop_secondary_audio_stream />
             <Loop_secondary_video_stream />
@@ -1915,20 +1906,20 @@ def maked_fsdescriptor(fu, mp, all_group_results=None):
 
     return xml_template.strip()
 
-def maked_indextable(sct, colour_primaries, HDR10plus_present_flag, color_space_dv):
+def maked_indextable(sct, video_format_mode, colorspec_value_mode, HDR10plus_present_flag, color_space_dv):
 
-    if sct == "24":
+    if video_format_mode == "2160p" and sct == "24":
       i4ce = "true"
     else:
       i4ce = "false"
-    
+
     if HDR10plus_present_flag == "true" and color_space_dv:
       hcef = "22"
     elif HDR10plus_present_flag == "true":
       hcef = "18"
-    elif colour_primaries and color_space_dv:
+    elif colorspec_value_mode == "BT.2020" and color_space_dv:
       hcef = "6"
-    elif colour_primaries:
+    elif colorspec_value_mode == "BT.2020":
       hcef = "2"
     else:
       hcef = "0"
